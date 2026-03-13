@@ -34,3 +34,41 @@ type Response struct {
 	ContentType     string        // MIME type only, parameters (charset etc.) stripped
 	Elapsed         time.Duration // wall-clock time from client.Do() to io.ReadAll() complete
 }
+
+// TechHints carries technology signals detected during Tier 2 header analysis.
+type TechHints struct {
+	IsNextJS     bool
+	IsCloudflare bool
+	CFChallenge  bool
+	IsJSON       bool // content-type was application/json — Tier 1 hidden API was missed
+	IsPHP        bool
+}
+
+// ExtractorResult is the raw output of a single Tier 2 extractor before merging.
+type ExtractorResult struct {
+	Source     string
+	Priority   int
+	Confidence float64
+	Fields     map[string]string
+	Err        error
+}
+
+// ExtractedField is a single resolved field after the Tier 2 priority merge.
+type ExtractedField struct {
+	Value      string
+	Source     string
+	Confidence float64
+	Priority   int
+}
+
+// AnalysisResult is the complete output of Tier 2.
+type AnalysisResult struct {
+	OriginalResponse *Response
+	Decision         Decision
+	RetryAfter       time.Duration // non-zero when Decision == DecisionBackoff
+	IsHollow         bool
+	HollowScore      float64
+	Fields           map[string]ExtractedField
+	TechHints        TechHints
+	Elapsed          time.Duration
+}
