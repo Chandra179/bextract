@@ -1,0 +1,99 @@
+basePath: /api/v1
+definitions:
+  tier1handler.ErrorResponse:
+    description: Error detail returned on failure.
+    properties:
+      error:
+        example: 'dial tcp: connection refused'
+        type: string
+    type: object
+  tier1handler.FetchRequest:
+    description: Target URL and optional overrides for the Tier 1 static fetch.
+    properties:
+      api_endpoint:
+        example: https://api.example.com/data
+        type: string
+      timeout_ms:
+        example: 5000
+        type: integer
+      url:
+        example: https://example.com
+        type: string
+    required:
+    - url
+    type: object
+  tier1handler.FetchResponse:
+    description: Raw HTTP response metadata and body returned by Tier 1.
+    properties:
+      body:
+        example: <html>...</html>
+        type: string
+      body_size:
+        example: 14823
+        type: integer
+      content_type:
+        example: text/html
+        type: string
+      elapsed_ms:
+        example: 342
+        type: integer
+      final_url:
+        example: https://example.com/
+        type: string
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      status_code:
+        example: 200
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: API Support
+    url: http://github.com/bextract
+  description: Multi-tier web data extraction pipeline. Tier 1 performs plain static
+    HTTP fetches.
+  license:
+    name: MIT
+  termsOfService: http://swagger.io/terms/
+  title: bextract API
+  version: "1.0"
+paths:
+  /tier1/fetch:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Performs a plain HTTP GET (or fetches an API endpoint directly)
+        using a rotating User-Agent pool. No JavaScript execution.
+      parameters:
+      - description: Fetch parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/tier1handler.FetchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tier1handler.FetchResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tier1handler.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/tier1handler.ErrorResponse'
+      summary: Tier 1 static HTTP fetch
+      tags:
+      - tier1
+schemes:
+- http
+- https
+swagger: "2.0"
