@@ -67,6 +67,98 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/tier2/analyze": {
+            "post": {
+                "description": "Fetches the URL via Tier 1 then runs the full Tier 2 five-stage pipeline:\nheader analysis, HTML parse, hollow detection, concurrent extraction, and merge.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tier2"
+                ],
+                "summary": "Tier 2 content detection \u0026 extraction",
+                "parameters": [
+                    {
+                        "description": "Analyze parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tier2handler.AnalyzeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/tier2handler.AnalyzeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/tier2handler.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/tier2handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tier3/render": {
+            "post": {
+                "description": "Fetches the URL via Tier 1, runs Tier 2 analysis, and — if Tier 2 returns Escalate —\nrenders the page in a headless Chrome instance and re-runs Tier 2 on the rendered DOM.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tier3"
+                ],
+                "summary": "Tier 3 browser render \u0026 extraction",
+                "parameters": [
+                    {
+                        "description": "Render parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tier3handler.RenderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/tier3handler.RenderResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/tier3handler.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/tier3handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -134,6 +226,233 @@ const docTemplate = `{
                 "status_code": {
                     "type": "integer",
                     "example": 200
+                }
+            }
+        },
+        "tier2handler.AnalyzeRequest": {
+            "description": "URL, optional API endpoint, and target fields for Tier 2 analysis.",
+            "type": "object",
+            "required": [
+                "url"
+            ],
+            "properties": {
+                "api_endpoint": {
+                    "type": "string",
+                    "example": "https://api.example.com/product/123"
+                },
+                "extraction_timeout_ms": {
+                    "type": "integer",
+                    "example": 5000
+                },
+                "fetch_timeout_ms": {
+                    "type": "integer",
+                    "example": 10000
+                },
+                "target_fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"price\"",
+                        "\"title\"]"
+                    ]
+                },
+                "url": {
+                    "type": "string",
+                    "example": "https://example.com/product/123"
+                }
+            }
+        },
+        "tier2handler.AnalyzeResponse": {
+            "description": "Tier 2 analysis result including decision, hollow detection, and extracted fields.",
+            "type": "object",
+            "properties": {
+                "decision": {
+                    "type": "string",
+                    "example": "Done"
+                },
+                "elapsed_ms": {
+                    "type": "integer",
+                    "example": 87
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/tier2handler.ExtractedFieldResponse"
+                    }
+                },
+                "hollow_score": {
+                    "type": "number",
+                    "example": 0.12
+                },
+                "is_hollow": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "tech_hints": {
+                    "$ref": "#/definitions/tier2handler.TechHintsResponse"
+                }
+            }
+        },
+        "tier2handler.ErrorResponse": {
+            "description": "Error detail returned on failure.",
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "dial tcp: connection refused"
+                }
+            }
+        },
+        "tier2handler.ExtractedFieldResponse": {
+            "description": "A data field extracted by Tier 2, with provenance metadata.",
+            "type": "object",
+            "properties": {
+                "confidence": {
+                    "type": "number",
+                    "example": 0.95
+                },
+                "priority": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "source": {
+                    "type": "string",
+                    "example": "json-ld"
+                },
+                "value": {
+                    "type": "string",
+                    "example": "29.99"
+                }
+            }
+        },
+        "tier2handler.TechHintsResponse": {
+            "description": "Technology fingerprints detected from HTTP headers.",
+            "type": "object",
+            "properties": {
+                "cf_challenge": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_cloudflare": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_json": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_nextjs": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "is_php": {
+                    "type": "boolean",
+                    "example": false
+                }
+            }
+        },
+        "tier3handler.ErrorResponse": {
+            "description": "Error detail returned on failure.",
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "dial tcp: connection refused"
+                }
+            }
+        },
+        "tier3handler.ExtractedFieldResponse": {
+            "description": "A data field extracted by Tier 2 running on the rendered DOM, with provenance metadata.",
+            "type": "object",
+            "properties": {
+                "confidence": {
+                    "type": "number",
+                    "example": 0.95
+                },
+                "priority": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "source": {
+                    "type": "string",
+                    "example": "json-ld"
+                },
+                "value": {
+                    "type": "string",
+                    "example": "29.99"
+                }
+            }
+        },
+        "tier3handler.RenderRequest": {
+            "description": "URL and optional configuration for Tier 3 browser rendering.",
+            "type": "object",
+            "required": [
+                "url"
+            ],
+            "properties": {
+                "api_endpoint": {
+                    "type": "string",
+                    "example": "https://api.example.com/product/123"
+                },
+                "extraction_timeout_ms": {
+                    "type": "integer",
+                    "example": 5000
+                },
+                "fetch_timeout_ms": {
+                    "type": "integer",
+                    "example": 10000
+                },
+                "render_timeout_ms": {
+                    "type": "integer",
+                    "example": 8000
+                },
+                "target_fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"price\"",
+                        "\"title\"]"
+                    ]
+                },
+                "url": {
+                    "type": "string",
+                    "example": "https://example.com/product/123"
+                }
+            }
+        },
+        "tier3handler.RenderResponse": {
+            "description": "Tier 3 render result including decision, hollow detection, escalation reason, and extracted fields.",
+            "type": "object",
+            "properties": {
+                "decision": {
+                    "type": "string",
+                    "example": "Done"
+                },
+                "elapsed_ms": {
+                    "type": "integer",
+                    "example": 320
+                },
+                "escalation_reason": {
+                    "type": "string",
+                    "example": ""
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/tier3handler.ExtractedFieldResponse"
+                    }
+                },
+                "hollow_score": {
+                    "type": "number",
+                    "example": 0.1
+                },
+                "is_hollow": {
+                    "type": "boolean",
+                    "example": false
                 }
             }
         }

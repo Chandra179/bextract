@@ -48,6 +48,172 @@ definitions:
         example: 200
         type: integer
     type: object
+  tier2handler.AnalyzeRequest:
+    description: URL, optional API endpoint, and target fields for Tier 2 analysis.
+    properties:
+      api_endpoint:
+        example: https://api.example.com/product/123
+        type: string
+      extraction_timeout_ms:
+        example: 5000
+        type: integer
+      fetch_timeout_ms:
+        example: 10000
+        type: integer
+      target_fields:
+        example:
+        - '["price"'
+        - '"title"]'
+        items:
+          type: string
+        type: array
+      url:
+        example: https://example.com/product/123
+        type: string
+    required:
+    - url
+    type: object
+  tier2handler.AnalyzeResponse:
+    description: Tier 2 analysis result including decision, hollow detection, and
+      extracted fields.
+    properties:
+      decision:
+        example: Done
+        type: string
+      elapsed_ms:
+        example: 87
+        type: integer
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/tier2handler.ExtractedFieldResponse'
+        type: object
+      hollow_score:
+        example: 0.12
+        type: number
+      is_hollow:
+        example: false
+        type: boolean
+      tech_hints:
+        $ref: '#/definitions/tier2handler.TechHintsResponse'
+    type: object
+  tier2handler.ErrorResponse:
+    description: Error detail returned on failure.
+    properties:
+      error:
+        example: 'dial tcp: connection refused'
+        type: string
+    type: object
+  tier2handler.ExtractedFieldResponse:
+    description: A data field extracted by Tier 2, with provenance metadata.
+    properties:
+      confidence:
+        example: 0.95
+        type: number
+      priority:
+        example: 1
+        type: integer
+      source:
+        example: json-ld
+        type: string
+      value:
+        example: "29.99"
+        type: string
+    type: object
+  tier2handler.TechHintsResponse:
+    description: Technology fingerprints detected from HTTP headers.
+    properties:
+      cf_challenge:
+        example: false
+        type: boolean
+      is_cloudflare:
+        example: false
+        type: boolean
+      is_json:
+        example: false
+        type: boolean
+      is_nextjs:
+        example: true
+        type: boolean
+      is_php:
+        example: false
+        type: boolean
+    type: object
+  tier3handler.ErrorResponse:
+    description: Error detail returned on failure.
+    properties:
+      error:
+        example: 'dial tcp: connection refused'
+        type: string
+    type: object
+  tier3handler.ExtractedFieldResponse:
+    description: A data field extracted by Tier 2 running on the rendered DOM, with
+      provenance metadata.
+    properties:
+      confidence:
+        example: 0.95
+        type: number
+      priority:
+        example: 1
+        type: integer
+      source:
+        example: json-ld
+        type: string
+      value:
+        example: "29.99"
+        type: string
+    type: object
+  tier3handler.RenderRequest:
+    description: URL and optional configuration for Tier 3 browser rendering.
+    properties:
+      api_endpoint:
+        example: https://api.example.com/product/123
+        type: string
+      extraction_timeout_ms:
+        example: 5000
+        type: integer
+      fetch_timeout_ms:
+        example: 10000
+        type: integer
+      render_timeout_ms:
+        example: 8000
+        type: integer
+      target_fields:
+        example:
+        - '["price"'
+        - '"title"]'
+        items:
+          type: string
+        type: array
+      url:
+        example: https://example.com/product/123
+        type: string
+    required:
+    - url
+    type: object
+  tier3handler.RenderResponse:
+    description: Tier 3 render result including decision, hollow detection, escalation
+      reason, and extracted fields.
+    properties:
+      decision:
+        example: Done
+        type: string
+      elapsed_ms:
+        example: 320
+        type: integer
+      escalation_reason:
+        example: ""
+        type: string
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/tier3handler.ExtractedFieldResponse'
+        type: object
+      hollow_score:
+        example: 0.1
+        type: number
+      is_hollow:
+        example: false
+        type: boolean
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -93,6 +259,70 @@ paths:
       summary: Tier 1 static HTTP fetch
       tags:
       - tier1
+  /tier2/analyze:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Fetches the URL via Tier 1 then runs the full Tier 2 five-stage pipeline:
+        header analysis, HTML parse, hollow detection, concurrent extraction, and merge.
+      parameters:
+      - description: Analyze parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/tier2handler.AnalyzeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tier2handler.AnalyzeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tier2handler.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/tier2handler.ErrorResponse'
+      summary: Tier 2 content detection & extraction
+      tags:
+      - tier2
+  /tier3/render:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Fetches the URL via Tier 1, runs Tier 2 analysis, and — if Tier 2 returns Escalate —
+        renders the page in a headless Chrome instance and re-runs Tier 2 on the rendered DOM.
+      parameters:
+      - description: Render parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/tier3handler.RenderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tier3handler.RenderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tier3handler.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/tier3handler.ErrorResponse'
+      summary: Tier 3 browser render & extraction
+      tags:
+      - tier3
 schemes:
 - http
 - https

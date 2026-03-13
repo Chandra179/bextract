@@ -4,6 +4,7 @@ import (
 	_ "bextract/docs" // generated Swagger docs
 	tier1handler "bextract/internal/api/tier1"
 	tier2handler "bextract/internal/api/tier2"
+	tier3handler "bextract/internal/api/tier3"
 
 	"github.com/gin-gonic/gin"
 	swaggerfiles "github.com/swaggo/files"
@@ -23,7 +24,10 @@ func New() *gin.Engine {
 	v1 := r.Group("/api/v1")
 	{
 		v1.POST("/tier1/fetch", t1.Fetch)
-		v1.POST("/tier2/fetch", t2.Analyze)
+		v1.POST("/tier2/analyze", t2.Analyze)
+		if t3, err := tier3handler.New(0, 0, 0, 0); err == nil {
+			v1.POST("/tier3/render", t3.Render)
+		}
 	}
 
 	return r

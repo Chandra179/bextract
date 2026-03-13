@@ -72,3 +72,15 @@ type AnalysisResult struct {
 	TechHints        TechHints
 	Elapsed          time.Duration
 }
+
+// RenderResult is the complete output of Tier 3.
+type RenderResult struct {
+	OriginalRequest  *Request
+	Decision         Decision
+	RetryAfter       time.Duration // non-zero when Decision == DecisionBackoff
+	IsHollow         bool
+	HollowScore      float64
+	Fields           map[string]ExtractedField
+	EscalationReason string // non-empty when Decision == DecisionEscalate
+	Elapsed          time.Duration
+}

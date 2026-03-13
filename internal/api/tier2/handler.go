@@ -29,11 +29,11 @@ func New(fetchTimeoutMS, extractionTimeoutMS int) *Handler {
 //
 //	@Description	URL, optional API endpoint, and target fields for Tier 2 analysis.
 type AnalyzeRequest struct {
-	URL                string   `json:"url"                      binding:"required" example:"https://example.com/product/123"`
-	APIEndpoint        string   `json:"api_endpoint,omitempty"                      example:"https://api.example.com/product/123"`
-	TargetFields       []string `json:"target_fields,omitempty"                     example:"[\"price\",\"title\"]"`
-	FetchTimeoutMS     int      `json:"fetch_timeout_ms,omitempty"                  example:"10000"`
-	ExtractionTimeoutMS int     `json:"extraction_timeout_ms,omitempty"             example:"5000"`
+	URL                 string   `json:"url"                      binding:"required" example:"https://example.com/product/123"`
+	APIEndpoint         string   `json:"api_endpoint,omitempty"                      example:"https://api.example.com/product/123"`
+	TargetFields        []string `json:"target_fields,omitempty"                     example:"[\"price\",\"title\"]"`
+	FetchTimeoutMS      int      `json:"fetch_timeout_ms,omitempty"                  example:"10000"`
+	ExtractionTimeoutMS int      `json:"extraction_timeout_ms,omitempty"             example:"5000"`
 }
 
 // ExtractedFieldResponse is a single resolved field in the response.
