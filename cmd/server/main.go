@@ -15,10 +15,47 @@
 package main
 
 import (
+	"context"
+	"log"
+	"os"
+
 	"bextract/internal/api/router"
+	"bextract/internal/config"
+	"bextract/pkg/logger"
+	"bextract/pkg/store"
 )
 
 func main() {
-	r := router.New()
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "./config.yaml"
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		log.Fatalf("failed to load config from %s: %v", configPath, err)
+	}
+
+	// Allow env override for ArangoDB password.
+	if pw := os.Getenv("ARANGO_PASSWORD"); pw != "" {
+		cfg.ArangoDB.Password = pw
+	}
+
+	env := os.Getenv("APP_ENV")
+	appLog := logger.NewLogger(env)
+
+	ctx := context.Background()
+	var st store.Store
+	if cfg.ArangoDB.Enabled {
+		st, err = store.NewArangoStore(ctx, cfg.ArangoDB.Host, cfg.ArangoDB.Database,
+			cfg.ArangoDB.Username, cfg.ArangoDB.Password)
+		if err != nil {
+			log.Fatalf("failed to connect to ArangoDB at %s: %v", cfg.ArangoDB.Host, err)
+		}
+	} else {
+		st = &store.NoopStore{}
+	}
+
+	r := router.New(cfg, appLog, st)
 	r.Run("0.0.0.0:8080")
 }

@@ -9,11 +9,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type metaExtractor struct{}
+type metaExtractor struct {
+	confidence float64
+}
 
 func (e *metaExtractor) Name() string        { return "meta-tags" }
 func (e *metaExtractor) Priority() int       { return 5 }
-func (e *metaExtractor) Confidence() float64 { return 0.88 }
+func (e *metaExtractor) Confidence() float64 { return e.confidence }
 
 func (e *metaExtractor) Extract(_ context.Context, doc *goquery.Document, resp *pipeline.Response) pipeline.ExtractorResult {
 	result := pipeline.ExtractorResult{

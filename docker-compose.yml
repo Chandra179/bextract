@@ -1,4 +1,19 @@
 services:
+  arangodb:
+    image: arangodb:3.12
+    ports:
+      - "8529:8529"
+    environment:
+      ARANGO_ROOT_PASSWORD: "${ARANGO_ROOT_PASSWORD:-devpassword}"
+    volumes:
+      - arangodb_data:/var/lib/arangodb3
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   bextract:
     build: .
     ports:
@@ -9,3 +24,10 @@ services:
     environment:
       - GIN_MODE=release
       - ROD_BROWSER_BIN=/usr/bin/chromium
+      - ARANGO_PASSWORD=${ARANGO_ROOT_PASSWORD:-devpassword}
+    depends_on:
+      arangodb:
+        condition: service_healthy
+
+volumes:
+  arangodb_data:

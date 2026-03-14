@@ -3,12 +3,11 @@ package tier2
 import (
 	"sort"
 
+	"bextract/internal/config"
 	"bextract/internal/pipeline"
 )
 
-const minConfidence = 0.50
-
-// scriptTagSources are the Priority values of extractors in Category A
+// scriptTagPriorities are the Priority values of extractors in Category A
 // (script-tag sources). A hollow page with data from any of these is Done.
 var scriptTagPriorities = map[int]bool{
 	1: true, // JSON-LD
@@ -23,12 +22,19 @@ func merge(
 	results []pipeline.ExtractorResult,
 	hints pipeline.TechHints,
 	hollow hollowResult,
+	classification PageClassification,
 	req *pipeline.Request,
+	cfg config.MergeConfig,
 ) *pipeline.AnalysisResult {
+	minConf := cfg.MinConfidence
+	if minConf <= 0 {
+		minConf = 0.50
+	}
+
 	// Filter: discard low-confidence or errored results.
 	valid := results[:0]
 	for _, r := range results {
-		if r.Err == nil && r.Confidence >= minConfidence && len(r.Fields) > 0 {
+		if r.Err == nil && r.Confidence >= minConf && len(r.Fields) > 0 {
 			valid = append(valid, r)
 		}
 	}
@@ -61,11 +67,12 @@ func merge(
 	decision := decideOutcome(merged, hollow, hasScriptTagData, req)
 
 	return &pipeline.AnalysisResult{
-		Decision:    decision,
-		IsHollow:    hollow.IsHollow,
-		HollowScore: hollow.Score,
-		Fields:      merged,
-		TechHints:   hints,
+		Decision:           decision,
+		PageType:           classification.Type,
+		PageTypeConfidence: classification.Confidence,
+		HollowScore:        hollow.Score,
+		Fields:             merged,
+		TechHints:          hints,
 	}
 }
 
@@ -85,15 +92,5 @@ func decideOutcome(
 		return pipeline.DecisionDone
 	}
 
-	// Check required fields.
-	if len(req.TargetFields) > 0 {
-		for _, field := range req.TargetFields {
-			if _, ok := merged[field]; !ok {
-				return pipeline.DecisionEscalate
-			}
-		}
-	}
-
-	// All required fields present (or none required).
 	return pipeline.DecisionDone
 }

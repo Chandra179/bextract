@@ -9,11 +9,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type cssHiddenExtractor struct{}
+type cssHiddenExtractor struct {
+	confidence float64
+}
 
 func (e *cssHiddenExtractor) Name() string        { return "css-hidden" }
 func (e *cssHiddenExtractor) Priority() int       { return 9 }
-func (e *cssHiddenExtractor) Confidence() float64 { return 0.60 }
+func (e *cssHiddenExtractor) Confidence() float64 { return e.confidence }
 
 func (e *cssHiddenExtractor) Extract(_ context.Context, doc *goquery.Document, resp *pipeline.Response) pipeline.ExtractorResult {
 	result := pipeline.ExtractorResult{

@@ -10,11 +10,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type nextDataExtractor struct{}
+type nextDataExtractor struct {
+	confidence float64
+}
 
-func (e *nextDataExtractor) Name() string       { return "next-data" }
-func (e *nextDataExtractor) Priority() int      { return 2 }
-func (e *nextDataExtractor) Confidence() float64 { return 0.92 }
+func (e *nextDataExtractor) Name() string        { return "next-data" }
+func (e *nextDataExtractor) Priority() int       { return 2 }
+func (e *nextDataExtractor) Confidence() float64 { return e.confidence }
 
 func (e *nextDataExtractor) Extract(_ context.Context, doc *goquery.Document, resp *pipeline.Response) pipeline.ExtractorResult {
 	result := pipeline.ExtractorResult{

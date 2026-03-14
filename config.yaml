@@ -1,0 +1,72 @@
+arangodb:
+  host: "http://arangodb:8529"
+  database: "bextract"
+  username: "root"
+  password: ""
+  enabled: true
+
+tier1:
+  timeout_ms: 15000
+
+tier2:
+  extraction_timeout_ms: 5000
+  hollow:
+    threshold: 0.70
+    link_rich_min_links: 10
+    tiny_body_bytes: 5120
+    text_density_ratio: 0.05
+    penalties:
+      cf-challenge: 1.00
+      captcha: 0.95
+      noscript-message: 0.90
+      empty-app-shell: 0.85
+      low-text-density: 0.70
+      tiny-body: 0.50
+  merge:
+    min_confidence: 0.50
+  extractors:
+    json-ld:
+      enabled: true
+      confidence: 0.95
+    next-data:
+      enabled: true
+      confidence: 0.92
+    globals:
+      enabled: true
+      confidence: 0.85
+    inline-var:
+      enabled: true
+      confidence: 0.75
+    meta-tags:
+      enabled: true
+      confidence: 0.88
+    microdata:
+      enabled: true
+      confidence: 0.82
+    data-attr:
+      enabled: true
+      confidence: 0.78
+    hidden-input:
+      enabled: true
+      confidence: 0.72
+    css-hidden:
+      enabled: true
+      confidence: 0.60
+    dom-text:
+      enabled: true
+      confidence: 0.55
+
+tier3:
+  pool_size: 2
+  render_timeout_ms: 8000
+  block_resources:
+    - stylesheet
+    - image
+    - media
+    - font
+  block_domains:
+    - "*google-analytics.com*"
+    - "*googletagmanager.com*"
+    - "*doubleclick.net*"
+    - "*facebook.com/tr*"
+    - "*hotjar.com*"

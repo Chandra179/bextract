@@ -9,11 +9,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type microdataExtractor struct{}
+type microdataExtractor struct {
+	confidence float64
+}
 
 func (e *microdataExtractor) Name() string        { return "microdata" }
 func (e *microdataExtractor) Priority() int       { return 6 }
-func (e *microdataExtractor) Confidence() float64 { return 0.82 }
+func (e *microdataExtractor) Confidence() float64 { return e.confidence }
 
 func (e *microdataExtractor) Extract(_ context.Context, doc *goquery.Document, resp *pipeline.Response) pipeline.ExtractorResult {
 	result := pipeline.ExtractorResult{

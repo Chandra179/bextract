@@ -5,8 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"bextract/internal/config"
 	"bextract/internal/pipeline"
 	"bextract/internal/tier2"
+	"bextract/pkg/logger"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
@@ -24,25 +26,33 @@ const (
 type Renderer struct {
 	browser       *rod.Browser
 	pool          rod.Pool[rod.Page]
+	poolSize      int
 	renderTimeout time.Duration
 	analyzer      *tier2.Analyzer
+	blockDomains  []string
+	log           logger.Logger
 }
 
 // New launches a headless Chrome instance and returns a ready Renderer.
-// Pass 0 for poolSize to use the default (2). Pass 0 for timeouts to use defaults.
+// Pass zero-value configs to use all defaults.
 // Returns an error if Chrome cannot be found or the browser fails to connect.
-func New(poolSize int, renderTimeout, extractionTimeout time.Duration) (*Renderer, error) {
-	if _, ok := launcher.LookPath(); !ok {
+func New(t3cfg config.Tier3Config, t2cfg config.Tier2Config, log logger.Logger) (*Renderer, error) {
+	binPath, ok := launcher.LookPath()
+	if !ok {
 		return nil, errNoBrowser
 	}
+
+	poolSize := t3cfg.PoolSize
 	if poolSize <= 0 {
 		poolSize = defaultPoolSize
 	}
-	if renderTimeout == 0 {
+	renderTimeout := time.Duration(t3cfg.RenderTimeoutMs) * time.Millisecond
+	if renderTimeout <= 0 {
 		renderTimeout = defaultRenderTimeout
 	}
 
 	u, err := launcher.New().
+		Bin(binPath).
 		Headless(true).
 		NoSandbox(true).
 		Set("disable-gpu").
@@ -58,12 +68,31 @@ func New(poolSize int, renderTimeout, extractionTimeout time.Duration) (*Rendere
 		return nil, err
 	}
 
+	blockDomains := t3cfg.BlockDomains
+	if len(blockDomains) == 0 {
+		blockDomains = []string{
+			"*google-analytics.com*",
+			"*googletagmanager.com*",
+			"*doubleclick.net*",
+			"*facebook.com/tr*",
+			"*hotjar.com*",
+		}
+	}
+
 	return &Renderer{
 		browser:       browser,
 		pool:          rod.NewPagePool(poolSize),
+		poolSize:      poolSize,
 		renderTimeout: renderTimeout,
-		analyzer:      tier2.New(extractionTimeout),
+		analyzer:      tier2.New(t2cfg, log),
+		blockDomains:  blockDomains,
+		log:           log,
 	}, nil
+}
+
+// PoolSize returns the configured pool size (useful for creating per-request renderers).
+func (r *Renderer) PoolSize() int {
+	return r.poolSize
 }
 
 // Close shuts down the underlying Chrome browser.
@@ -76,10 +105,13 @@ func (r *Renderer) Close() error {
 func (r *Renderer) Render(ctx context.Context, req *pipeline.Request) *pipeline.RenderResult {
 	start := time.Now()
 
+	r.log.Debug(ctx, "tier3: starting render", logger.Field{Key: "url", Value: req.URL})
+
 	page, err := r.pool.Get(func() (*rod.Page, error) {
 		return r.browser.Page(proto.TargetCreateTarget{URL: ""})
 	})
 	if err != nil {
+		r.log.Error(ctx, "tier3: browser page creation failed", logger.Field{Key: "url", Value: req.URL}, logger.Field{Key: "error", Value: err.Error()})
 		return escalateResult(req, "browser page creation failed: "+err.Error(), time.Since(start))
 	}
 	defer func() {
@@ -101,15 +133,8 @@ func (r *Renderer) Render(ctx context.Context, req *pipeline.Request) *pipeline.
 			h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
 		})
 	}
-	// Block known analytics/tracking domains regardless of resource type.
-	analyticsPatterns := []string{
-		"*google-analytics.com*",
-		"*googletagmanager.com*",
-		"*doubleclick.net*",
-		"*facebook.com/tr*",
-		"*hotjar.com*",
-	}
-	for _, pat := range analyticsPatterns {
+	// Block configured analytics/tracking domains regardless of resource type.
+	for _, pat := range r.blockDomains {
 		pat := pat
 		_ = router.Add(pat, proto.NetworkResourceTypeDocument, func(h *rod.Hijack) {
 			h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
@@ -122,6 +147,7 @@ func (r *Renderer) Render(ctx context.Context, req *pipeline.Request) *pipeline.
 	defer cancel()
 
 	if err := page.Context(renderCtx).Navigate(req.URL); err != nil {
+		r.log.Error(ctx, "tier3: navigation failed", logger.Field{Key: "url", Value: req.URL}, logger.Field{Key: "error", Value: err.Error()})
 		return escalateResult(req, "navigation failed: "+err.Error(), time.Since(start))
 	}
 
@@ -139,11 +165,13 @@ func (r *Renderer) Render(ctx context.Context, req *pipeline.Request) *pipeline.
 	}
 
 	if reason := detectEscalation(page); reason != "" {
+		r.log.Warn(ctx, "tier3: escalation signal detected", logger.Field{Key: "url", Value: req.URL}, logger.Field{Key: "reason", Value: reason})
 		return escalateResult(req, reason, time.Since(start))
 	}
 
 	html, err := page.HTML()
 	if err != nil {
+		r.log.Error(ctx, "tier3: HTML extraction failed", logger.Field{Key: "url", Value: req.URL}, logger.Field{Key: "error", Value: err.Error()})
 		return escalateResult(req, "HTML extraction failed: "+err.Error(), time.Since(start))
 	}
 
@@ -158,14 +186,22 @@ func (r *Renderer) Render(ctx context.Context, req *pipeline.Request) *pipeline.
 	analysis := r.analyzer.Analyze(ctx, syntheticResp)
 
 	result := &pipeline.RenderResult{
-		OriginalRequest: req,
-		Decision:        analysis.Decision,
-		RetryAfter:      analysis.RetryAfter,
-		IsHollow:        analysis.IsHollow,
-		HollowScore:     analysis.HollowScore,
-		Fields:          analysis.Fields,
-		Elapsed:         time.Since(start),
+		OriginalRequest:    req,
+		Decision:           analysis.Decision,
+		RetryAfter:         analysis.RetryAfter,
+		PageType:           analysis.PageType,
+		PageTypeConfidence: analysis.PageTypeConfidence,
+		HollowScore:        analysis.HollowScore,
+		Fields:             analysis.Fields,
+		Elapsed:            time.Since(start),
 	}
+
+	if result.Decision == pipeline.DecisionEscalate {
+		r.log.Warn(ctx, "tier3: tier2 re-analysis returned escalate", logger.Field{Key: "url", Value: req.URL}, logger.Field{Key: "hollow_score", Value: result.HollowScore})
+	} else {
+		r.log.Debug(ctx, "tier3: render complete", logger.Field{Key: "url", Value: req.URL}, logger.Field{Key: "decision", Value: result.Decision}, logger.Field{Key: "elapsed_ms", Value: result.Elapsed.Milliseconds()})
+	}
+
 	return result
 }
 

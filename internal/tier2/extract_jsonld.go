@@ -10,11 +10,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type jsonLDExtractor struct{}
+type jsonLDExtractor struct {
+	confidence float64
+}
 
-func (e *jsonLDExtractor) Name() string       { return "json-ld" }
-func (e *jsonLDExtractor) Priority() int      { return 1 }
-func (e *jsonLDExtractor) Confidence() float64 { return 0.95 }
+func (e *jsonLDExtractor) Name() string        { return "json-ld" }
+func (e *jsonLDExtractor) Priority() int       { return 1 }
+func (e *jsonLDExtractor) Confidence() float64 { return e.confidence }
 
 func (e *jsonLDExtractor) Extract(_ context.Context, doc *goquery.Document, resp *pipeline.Response) pipeline.ExtractorResult {
 	result := pipeline.ExtractorResult{

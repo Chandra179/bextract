@@ -10,11 +10,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type globalsExtractor struct{}
+type globalsExtractor struct {
+	confidence float64
+}
 
-func (e *globalsExtractor) Name() string       { return "state-globals" }
-func (e *globalsExtractor) Priority() int      { return 3 }
-func (e *globalsExtractor) Confidence() float64 { return 0.85 }
+func (e *globalsExtractor) Name() string        { return "state-globals" }
+func (e *globalsExtractor) Priority() int       { return 3 }
+func (e *globalsExtractor) Confidence() float64 { return e.confidence }
 
 // globalPatterns matches common framework window global assignments.
 // Each pattern captures the JSON object as group 1.

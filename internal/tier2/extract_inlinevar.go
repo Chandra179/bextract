@@ -10,11 +10,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type inlineVarExtractor struct{}
+type inlineVarExtractor struct {
+	confidence float64
+}
 
-func (e *inlineVarExtractor) Name() string       { return "inline-vars" }
-func (e *inlineVarExtractor) Priority() int      { return 4 }
-func (e *inlineVarExtractor) Confidence() float64 { return 0.75 }
+func (e *inlineVarExtractor) Name() string        { return "inline-vars" }
+func (e *inlineVarExtractor) Priority() int       { return 4 }
+func (e *inlineVarExtractor) Confidence() float64 { return e.confidence }
 
 // inlineVarPattern matches uppercase-only variable declarations assigned a JSON object.
 // Uppercase restriction avoids matching framework internals that use camelCase.

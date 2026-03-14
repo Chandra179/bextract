@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+*.o
+*.a
+*.so
+bextract
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+architecture.md
+CLAUDE.md
+
+# Tests (not needed in Docker)
+tests/
+*_test.go
+*_test.sh
+
+# Docker
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Misc
+Makefile
+README*
+*.md

@@ -109,7 +109,6 @@ bextract/
 │       ├── renderer.go             # go-rod Chrome pool, request blocking, Tier 2 re-run
 │       └── errors.go               # errNoBrowser sentinel
 ├── docs/                           # generated Swagger (do not edit manually)
-├── tests/                          # shell integration tests
 ├── Dockerfile                      # multi-stage: golang:1.26-bookworm builder + debian:bookworm-slim runtime with chromium
 ├── docker-compose.yml              # single-service compose; sets ROD_BROWSER_BIN, seccomp:unconfined
 ├── Makefile
@@ -121,3 +120,7 @@ bextract/
 - The runtime image installs `chromium` from Debian bookworm repos (at `/usr/bin/chromium`).
 - `ROD_BROWSER_BIN=/usr/bin/chromium` is set in both the Dockerfile and docker-compose.yml so go-rod's `launcher.LookPath()` finds the binary without attempting an auto-download.
 - `seccomp:unconfined` is required for Chrome's sandboxing syscalls inside Docker; `NoSandbox(true)` is set programmatically in the renderer.
+
+## Logging
+
+The project uses `pkg/logger` for structured logging

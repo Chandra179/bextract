@@ -230,7 +230,7 @@ const docTemplate = `{
             }
         },
         "tier2handler.AnalyzeRequest": {
-            "description": "URL, optional API endpoint, and target fields for Tier 2 analysis.",
+            "description": "URL and optional configuration for Tier 2 analysis.",
             "type": "object",
             "required": [
                 "url"
@@ -247,16 +247,6 @@ const docTemplate = `{
                 "fetch_timeout_ms": {
                     "type": "integer",
                     "example": 10000
-                },
-                "target_fields": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "[\"price\"",
-                        "\"title\"]"
-                    ]
                 },
                 "url": {
                     "type": "string",
@@ -287,6 +277,10 @@ const docTemplate = `{
                     "example": 0.12
                 },
                 "is_hollow": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_link_rich": {
                     "type": "boolean",
                     "example": false
                 },
@@ -407,16 +401,6 @@ const docTemplate = `{
                 "render_timeout_ms": {
                     "type": "integer",
                     "example": 8000
-                },
-                "target_fields": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "[\"price\"",
-                        "\"title\"]"
-                    ]
                 },
                 "url": {
                     "type": "string",

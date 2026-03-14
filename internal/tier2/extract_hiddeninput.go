@@ -9,11 +9,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type hiddenInputExtractor struct{}
+type hiddenInputExtractor struct {
+	confidence float64
+}
 
 func (e *hiddenInputExtractor) Name() string        { return "hidden-inputs" }
 func (e *hiddenInputExtractor) Priority() int       { return 8 }
-func (e *hiddenInputExtractor) Confidence() float64 { return 0.72 }
+func (e *hiddenInputExtractor) Confidence() float64 { return e.confidence }
 
 // securityTokenNames are filtered out — they are not useful data fields.
 var securityTokenNames = map[string]bool{

@@ -113,7 +113,7 @@ Tier 5   ~512 MB RAM  3–8s      $0.05+  (Residential proxies)
 │  TIER 5 — Stealth Protocol                                      │
 │  Residential Proxies + Patched Chromium                         │
 │                                                                 │
-│  • Triggered only by confirmed 403 or CAPTCHA in Tiers 1–4     │
+│  • Triggered only by confirmed 403 or CAPTCHA in Tiers 1–4      │
 │  • Stealth patches hide headless fingerprint from Cloudflare    │
 │  • Sticky sessions required for multi-page flows                │
 └──────────────────────────────┬──────────────────────────────────┘
@@ -236,6 +236,14 @@ Before running extractors, the pipeline determines whether the page is a JavaScr
 A page is classified as hollow when total penalty ≥ 0.70. A hollow page with no successful extractions triggers immediate escalation to Tier 3.
 
 Note: Body size alone is not a reliable hollow signal. A 3 KB page can be a valid small article; a 200 KB page can be a React shell with all content deferred. The text-density ratio is the more reliable metric.
+
+**Counter-signal: Link-Rich Pages**
+
+Before accumulating penalties, Stage 3 counts `<a>` elements with non-empty text. If the count is ≥ 10, the page is flagged `IsLinkRich=true` and the two ambiguous penalties (`low-text-density` and `tiny-body`) are suppressed entirely.
+
+Rationale: link aggregators and navigation hubs (e.g. news.ycombinator.com, reddit listings, directory pages) have a structurally low text/HTML ratio by design — the content *is* the links. These pages are fully server-rendered; Chrome would see identical HTML. Launching Tier 3 for them is wasteful and incorrect. True JS-shell signals (`cf-challenge`, `captcha`, `noscript-message`, `empty-app-shell`) are never suppressed regardless of link count.
+
+`IsLinkRich` is propagated through `AnalysisResult` and exposed in the API response as `is_link_rich`.
 
 ---
 

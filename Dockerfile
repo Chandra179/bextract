@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 COPY vendor/ vendor/
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o bextract ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -o bextract ./cmd/server
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim

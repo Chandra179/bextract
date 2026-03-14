@@ -15,12 +15,25 @@ const (
 	DecisionBackoff                  // rate limited or server error — retry same tier after delay
 )
 
+// PageType classifies the kind of page encountered during Tier 2 analysis.
+type PageType string
+
+const (
+	// PageTypeContentRich indicates good text density with no JS-shell signals.
+	PageTypeContentRich PageType = "content-rich"
+	// PageTypeLinkRich indicates a navigation or aggregator page with many text links.
+	PageTypeLinkRich PageType = "link-rich"
+	// PageTypeAppShell indicates a JavaScript-required page with no static content.
+	PageTypeAppShell PageType = "app-shell"
+	// PageTypeMixed indicates partial content that may benefit from JS rendering.
+	PageTypeMixed PageType = "mixed"
+)
+
 // Request carries everything a tier needs to execute.
 type Request struct {
-	URL          string
-	TargetFields []string
-	APIEndpoint  string        // optional: pre-known JSON API override; fetched instead of URL when set
-	Timeout      time.Duration // zero means use the tier's default timeout
+	URL         string
+	APIEndpoint string        // optional: pre-known JSON API override; fetched instead of URL when set
+	Timeout     time.Duration // zero means use the tier's default timeout
 }
 
 // Response is the complete output of Tier 1, passed as-is to Tier 2.
@@ -63,22 +76,26 @@ type ExtractedField struct {
 
 // AnalysisResult is the complete output of Tier 2.
 type AnalysisResult struct {
-	OriginalResponse *Response
-	Decision         Decision
-	RetryAfter       time.Duration // non-zero when Decision == DecisionBackoff
-	IsHollow         bool
-	HollowScore      float64
-	Fields           map[string]ExtractedField
-	TechHints        TechHints
-	Elapsed          time.Duration
+	OriginalResponse   *Response
+	Decision           Decision
+	RetryAfter         time.Duration // non-zero when Decision == DecisionBackoff
+	PageType           PageType
+	PageTypeConfidence float64
+	// HollowScore and TechHints are kept for debug/observability use only.
+	HollowScore float64
+	TechHints   TechHints
+	Fields      map[string]ExtractedField
+	Elapsed     time.Duration
 }
 
 // RenderResult is the complete output of Tier 3.
 type RenderResult struct {
-	OriginalRequest  *Request
-	Decision         Decision
-	RetryAfter       time.Duration // non-zero when Decision == DecisionBackoff
-	IsHollow         bool
+	OriginalRequest    *Request
+	Decision           Decision
+	RetryAfter         time.Duration // non-zero when Decision == DecisionBackoff
+	PageType           PageType
+	PageTypeConfidence float64
+	// HollowScore is kept for debug/observability use only.
 	HollowScore      float64
 	Fields           map[string]ExtractedField
 	EscalationReason string // non-empty when Decision == DecisionEscalate

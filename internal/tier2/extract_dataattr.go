@@ -9,11 +9,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-type dataAttrExtractor struct{}
+type dataAttrExtractor struct {
+	confidence float64
+}
 
 func (e *dataAttrExtractor) Name() string        { return "data-attrs" }
 func (e *dataAttrExtractor) Priority() int       { return 7 }
-func (e *dataAttrExtractor) Confidence() float64 { return 0.78 }
+func (e *dataAttrExtractor) Confidence() float64 { return e.confidence }
 
 // containerSelectors targets elements that commonly carry product/listing data attributes.
 var containerSelectors = strings.Join([]string{
