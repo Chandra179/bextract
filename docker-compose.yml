@@ -1,0 +1,11 @@
+services:
+  bextract:
+    build: .
+    ports:
+      - "8080:8080"
+    # chromium requires --no-sandbox when running as root inside Docker
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - GIN_MODE=release
+      - ROD_BROWSER_BIN=/usr/bin/chromium

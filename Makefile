@@ -1,8 +1,16 @@
-.PHONY: run build test clean tidy swag
+.PHONY: run build test clean tidy swag docker-build docker-up docker-down
 
-## run: start the HTTP server with go run (no build step required)
-run:
-	go run ./cmd/server
+## docker-build: build the Docker image
+docker-build:
+	docker compose build
+
+## docker-up: build and start the server in Docker (detached)
+docker-up:
+	docker compose up --build -d
+
+## docker-down: stop and remove Docker containers
+docker-down:
+	docker compose down
 
 ## test: run all tests
 test:
