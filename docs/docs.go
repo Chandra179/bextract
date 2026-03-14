@@ -90,6 +90,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/tier2handler.AnalyzeRequest"
                         }
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include diagnostic debug info",
+                        "name": "debug",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -136,6 +142,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/tier3handler.RenderRequest"
                         }
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include diagnostic debug info",
+                        "name": "debug",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -183,6 +195,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "https://api.example.com/data"
                 },
+                "job_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
                 "timeout_ms": {
                     "type": "integer",
                     "example": 5000
@@ -223,9 +239,32 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "job_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
                 "status_code": {
                     "type": "integer",
                     "example": 200
+                }
+            }
+        },
+        "tier2handler.AnalyzeDebug": {
+            "description": "Internal diagnostic data for Tier 2 analysis (debug mode only).",
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/tier2handler.FieldDebugResponse"
+                    }
+                },
+                "hollow_score": {
+                    "type": "number",
+                    "example": 0.12
+                },
+                "tech_hints": {
+                    "$ref": "#/definitions/tier2handler.TechHintsResponse"
                 }
             }
         },
@@ -248,6 +287,10 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 10000
                 },
+                "job_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
                 "url": {
                     "type": "string",
                     "example": "https://example.com/product/123"
@@ -255,9 +298,17 @@ const docTemplate = `{
             }
         },
         "tier2handler.AnalyzeResponse": {
-            "description": "Tier 2 analysis result including decision, hollow detection, and extracted fields.",
+            "description": "Tier 2 analysis result including decision, page type, and extracted fields.",
             "type": "object",
             "properties": {
+                "debug": {
+                    "description": "populated only when ?debug=true",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/tier2handler.AnalyzeDebug"
+                        }
+                    ]
+                },
                 "decision": {
                     "type": "string",
                     "example": "Done"
@@ -269,23 +320,20 @@ const docTemplate = `{
                 "fields": {
                     "type": "object",
                     "additionalProperties": {
-                        "$ref": "#/definitions/tier2handler.ExtractedFieldResponse"
+                        "$ref": "#/definitions/tier2handler.FieldResponse"
                     }
                 },
-                "hollow_score": {
+                "job_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "page_type": {
+                    "type": "string",
+                    "example": "content-rich"
+                },
+                "page_type_confidence": {
                     "type": "number",
-                    "example": 0.12
-                },
-                "is_hollow": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "is_link_rich": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "tech_hints": {
-                    "$ref": "#/definitions/tier2handler.TechHintsResponse"
+                    "example": 0.88
                 }
             }
         },
@@ -299,8 +347,8 @@ const docTemplate = `{
                 }
             }
         },
-        "tier2handler.ExtractedFieldResponse": {
-            "description": "A data field extracted by Tier 2, with provenance metadata.",
+        "tier2handler.FieldDebugResponse": {
+            "description": "A data field with full provenance metadata (debug only).",
             "type": "object",
             "properties": {
                 "confidence": {
@@ -311,6 +359,20 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1
                 },
+                "source": {
+                    "type": "string",
+                    "example": "json-ld"
+                },
+                "value": {
+                    "type": "string",
+                    "example": "29.99"
+                }
+            }
+        },
+        "tier2handler.FieldResponse": {
+            "description": "A data field extracted by Tier 2.",
+            "type": "object",
+            "properties": {
                 "source": {
                     "type": "string",
                     "example": "json-ld"
@@ -357,8 +419,8 @@ const docTemplate = `{
                 }
             }
         },
-        "tier3handler.ExtractedFieldResponse": {
-            "description": "A data field extracted by Tier 2 running on the rendered DOM, with provenance metadata.",
+        "tier3handler.FieldDebugResponse": {
+            "description": "A data field with full provenance metadata (debug only).",
             "type": "object",
             "properties": {
                 "confidence": {
@@ -376,6 +438,36 @@ const docTemplate = `{
                 "value": {
                     "type": "string",
                     "example": "29.99"
+                }
+            }
+        },
+        "tier3handler.FieldResponse": {
+            "description": "A data field extracted by Tier 2 running on the rendered DOM.",
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "example": "json-ld"
+                },
+                "value": {
+                    "type": "string",
+                    "example": "29.99"
+                }
+            }
+        },
+        "tier3handler.RenderDebug": {
+            "description": "Internal diagnostic data for Tier 3 rendering (debug mode only).",
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/tier3handler.FieldDebugResponse"
+                    }
+                },
+                "hollow_score": {
+                    "type": "number",
+                    "example": 0.1
                 }
             }
         },
@@ -398,6 +490,10 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 10000
                 },
+                "job_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
                 "render_timeout_ms": {
                     "type": "integer",
                     "example": 8000
@@ -409,9 +505,17 @@ const docTemplate = `{
             }
         },
         "tier3handler.RenderResponse": {
-            "description": "Tier 3 render result including decision, hollow detection, escalation reason, and extracted fields.",
+            "description": "Tier 3 render result including decision, page type, escalation reason, and extracted fields.",
             "type": "object",
             "properties": {
+                "debug": {
+                    "description": "populated only when ?debug=true",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/tier3handler.RenderDebug"
+                        }
+                    ]
+                },
                 "decision": {
                     "type": "string",
                     "example": "Done"
@@ -427,16 +531,20 @@ const docTemplate = `{
                 "fields": {
                     "type": "object",
                     "additionalProperties": {
-                        "$ref": "#/definitions/tier3handler.ExtractedFieldResponse"
+                        "$ref": "#/definitions/tier3handler.FieldResponse"
                     }
                 },
-                "hollow_score": {
-                    "type": "number",
-                    "example": 0.1
+                "job_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
-                "is_hollow": {
-                    "type": "boolean",
-                    "example": false
+                "page_type": {
+                    "type": "string",
+                    "example": "content-rich"
+                },
+                "page_type_confidence": {
+                    "type": "number",
+                    "example": 0.9
                 }
             }
         }

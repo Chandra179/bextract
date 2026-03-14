@@ -36,6 +36,10 @@ func main() {
 		log.Fatalf("failed to load config from %s: %v", configPath, err)
 	}
 
+	if host := os.Getenv("ARANGO_HOST"); host != "" {
+		cfg.ArangoDB.Host = host
+	}
+
 	// Allow env override for ArangoDB password.
 	if pw := os.Getenv("ARANGO_PASSWORD"); pw != "" {
 		cfg.ArangoDB.Password = pw

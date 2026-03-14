@@ -30,9 +30,9 @@ type Tier1Config struct {
 
 // Tier2Config holds Tier 2 (extraction pipeline) tuning parameters.
 type Tier2Config struct {
-	ExtractionTimeoutMs int                       `yaml:"extraction_timeout_ms"` // default 5000
-	Hollow              HollowConfig              `yaml:"hollow"`
-	Merge               MergeConfig               `yaml:"merge"`
+	ExtractionTimeoutMs int                        `yaml:"extraction_timeout_ms"` // default 5000
+	Hollow              HollowConfig               `yaml:"hollow"`
+	Merge               MergeConfig                `yaml:"merge"`
 	Extractors          map[string]ExtractorConfig `yaml:"extractors"`
 }
 
@@ -78,12 +78,12 @@ func Defaults() *Config {
 				TinyBodyBytes:    5120,
 				TextDensityRatio: 0.05,
 				Penalties: map[string]float64{
-					"cf-challenge":    1.00,
-					"captcha":         0.95,
+					"cf-challenge":     1.00,
+					"captcha":          0.95,
 					"noscript-message": 0.90,
-					"empty-app-shell": 0.85,
+					"empty-app-shell":  0.85,
 					"low-text-density": 0.70,
-					"tiny-body":       0.50,
+					"tiny-body":        0.50,
 				},
 			},
 			Merge: MergeConfig{
@@ -106,7 +106,7 @@ func Defaults() *Config {
 			Host:     "http://localhost:8529",
 			Database: "bextract",
 			Username: "root",
-			Enabled:  false,
+			Enabled:  true,
 		},
 		Tier3: Tier3Config{
 			PoolSize:        2,

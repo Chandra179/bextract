@@ -13,6 +13,9 @@ definitions:
       api_endpoint:
         example: https://api.example.com/data
         type: string
+      job_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
       timeout_ms:
         example: 5000
         type: integer
@@ -44,9 +47,25 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      job_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
       status_code:
         example: 200
         type: integer
+    type: object
+  tier2handler.AnalyzeDebug:
+    description: Internal diagnostic data for Tier 2 analysis (debug mode only).
+    properties:
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/tier2handler.FieldDebugResponse'
+        type: object
+      hollow_score:
+        example: 0.12
+        type: number
+      tech_hints:
+        $ref: '#/definitions/tier2handler.TechHintsResponse'
     type: object
   tier2handler.AnalyzeRequest:
     description: URL and optional configuration for Tier 2 analysis.
@@ -60,6 +79,9 @@ definitions:
       fetch_timeout_ms:
         example: 10000
         type: integer
+      job_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
       url:
         example: https://example.com/product/123
         type: string
@@ -67,9 +89,13 @@ definitions:
     - url
     type: object
   tier2handler.AnalyzeResponse:
-    description: Tier 2 analysis result including decision, hollow detection, and
-      extracted fields.
+    description: Tier 2 analysis result including decision, page type, and extracted
+      fields.
     properties:
+      debug:
+        allOf:
+        - $ref: '#/definitions/tier2handler.AnalyzeDebug'
+        description: populated only when ?debug=true
       decision:
         example: Done
         type: string
@@ -78,19 +104,17 @@ definitions:
         type: integer
       fields:
         additionalProperties:
-          $ref: '#/definitions/tier2handler.ExtractedFieldResponse'
+          $ref: '#/definitions/tier2handler.FieldResponse'
         type: object
-      hollow_score:
-        example: 0.12
+      job_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      page_type:
+        example: content-rich
+        type: string
+      page_type_confidence:
+        example: 0.88
         type: number
-      is_hollow:
-        example: false
-        type: boolean
-      is_link_rich:
-        example: false
-        type: boolean
-      tech_hints:
-        $ref: '#/definitions/tier2handler.TechHintsResponse'
     type: object
   tier2handler.ErrorResponse:
     description: Error detail returned on failure.
@@ -99,8 +123,8 @@ definitions:
         example: 'dial tcp: connection refused'
         type: string
     type: object
-  tier2handler.ExtractedFieldResponse:
-    description: A data field extracted by Tier 2, with provenance metadata.
+  tier2handler.FieldDebugResponse:
+    description: A data field with full provenance metadata (debug only).
     properties:
       confidence:
         example: 0.95
@@ -108,6 +132,16 @@ definitions:
       priority:
         example: 1
         type: integer
+      source:
+        example: json-ld
+        type: string
+      value:
+        example: "29.99"
+        type: string
+    type: object
+  tier2handler.FieldResponse:
+    description: A data field extracted by Tier 2.
+    properties:
       source:
         example: json-ld
         type: string
@@ -141,9 +175,8 @@ definitions:
         example: 'dial tcp: connection refused'
         type: string
     type: object
-  tier3handler.ExtractedFieldResponse:
-    description: A data field extracted by Tier 2 running on the rendered DOM, with
-      provenance metadata.
+  tier3handler.FieldDebugResponse:
+    description: A data field with full provenance metadata (debug only).
     properties:
       confidence:
         example: 0.95
@@ -158,6 +191,27 @@ definitions:
         example: "29.99"
         type: string
     type: object
+  tier3handler.FieldResponse:
+    description: A data field extracted by Tier 2 running on the rendered DOM.
+    properties:
+      source:
+        example: json-ld
+        type: string
+      value:
+        example: "29.99"
+        type: string
+    type: object
+  tier3handler.RenderDebug:
+    description: Internal diagnostic data for Tier 3 rendering (debug mode only).
+    properties:
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/tier3handler.FieldDebugResponse'
+        type: object
+      hollow_score:
+        example: 0.1
+        type: number
+    type: object
   tier3handler.RenderRequest:
     description: URL and optional configuration for Tier 3 browser rendering.
     properties:
@@ -170,6 +224,9 @@ definitions:
       fetch_timeout_ms:
         example: 10000
         type: integer
+      job_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
       render_timeout_ms:
         example: 8000
         type: integer
@@ -180,9 +237,13 @@ definitions:
     - url
     type: object
   tier3handler.RenderResponse:
-    description: Tier 3 render result including decision, hollow detection, escalation
-      reason, and extracted fields.
+    description: Tier 3 render result including decision, page type, escalation reason,
+      and extracted fields.
     properties:
+      debug:
+        allOf:
+        - $ref: '#/definitions/tier3handler.RenderDebug'
+        description: populated only when ?debug=true
       decision:
         example: Done
         type: string
@@ -194,14 +255,17 @@ definitions:
         type: string
       fields:
         additionalProperties:
-          $ref: '#/definitions/tier3handler.ExtractedFieldResponse'
+          $ref: '#/definitions/tier3handler.FieldResponse'
         type: object
-      hollow_score:
-        example: 0.1
+      job_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      page_type:
+        example: content-rich
+        type: string
+      page_type_confidence:
+        example: 0.9
         type: number
-      is_hollow:
-        example: false
-        type: boolean
     type: object
 host: localhost:8080
 info:
@@ -262,6 +326,10 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/tier2handler.AnalyzeRequest'
+      - description: Include diagnostic debug info
+        in: query
+        name: debug
+        type: boolean
       produces:
       - application/json
       responses:
@@ -294,6 +362,10 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/tier3handler.RenderRequest'
+      - description: Include diagnostic debug info
+        in: query
+        name: debug
+        type: boolean
       produces:
       - application/json
       responses:
