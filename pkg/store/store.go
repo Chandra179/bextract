@@ -13,6 +13,7 @@ const (
 	JobStatusTier1Complete JobStatus = "tier1_complete"
 	JobStatusTier2Complete JobStatus = "tier2_complete"
 	JobStatusTier3Complete JobStatus = "tier3_complete"
+	JobStatusTier4Complete JobStatus = "tier4_complete"
 	JobStatusAborted       JobStatus = "aborted"
 )
 
@@ -68,17 +69,30 @@ type Tier3Result struct {
 	RenderedAt         time.Time              `json:"rendered_at"`
 }
 
+// Tier4Result is the persisted output of Tier 4.
+type Tier4Result struct {
+	Decision           string                 `json:"decision"`
+	PageType           string                 `json:"page_type"`
+	PageTypeConfidence float64                `json:"page_type_confidence"`
+	HollowScore        float64                `json:"hollow_score"`
+	EscalationReason   string                 `json:"escalation_reason"`
+	Fields             map[string]StoredField `json:"fields"`
+	ElapsedMS          int64                  `json:"elapsed_ms"`
+	RenderedAt         time.Time              `json:"rendered_at"`
+}
+
 // ExtractionJob is the top-level ArangoDB document stored in the "extractions" collection.
 type ExtractionJob struct {
-	Key           string        `json:"_key"`
-	URL           string        `json:"url"`
-	CreatedAt     time.Time     `json:"created_at"`
-	UpdatedAt     time.Time     `json:"updated_at"`
-	Status        JobStatus     `json:"status"`
-	Tier1         *Tier1Result  `json:"tier1,omitempty"`
-	Tier2         *Tier2Result  `json:"tier2,omitempty"`
-	Tier3         *Tier3Result  `json:"tier3,omitempty"`
-	FinalDecision string        `json:"final_decision,omitempty"`
+	Key           string                 `json:"_key"`
+	URL           string                 `json:"url"`
+	CreatedAt     time.Time              `json:"created_at"`
+	UpdatedAt     time.Time              `json:"updated_at"`
+	Status        JobStatus              `json:"status"`
+	Tier1         *Tier1Result           `json:"tier1,omitempty"`
+	Tier2         *Tier2Result           `json:"tier2,omitempty"`
+	Tier3         *Tier3Result           `json:"tier3,omitempty"`
+	Tier4         *Tier4Result           `json:"tier4,omitempty"`
+	FinalDecision string                 `json:"final_decision,omitempty"`
 	FinalFields   map[string]StoredField `json:"final_fields,omitempty"`
 }
 
@@ -92,6 +106,8 @@ type Store interface {
 	SaveTier2(ctx context.Context, jobID string, r *Tier2Result) error
 	// SaveTier3 persists the Tier 3 result for the given job (PATCH).
 	SaveTier3(ctx context.Context, jobID string, r *Tier3Result) error
+	// SaveTier4 persists the Tier 4 result for the given job (PATCH).
+	SaveTier4(ctx context.Context, jobID string, r *Tier4Result) error
 	// GetJob retrieves a job document by ID.
 	GetJob(ctx context.Context, jobID string) (*ExtractionJob, error)
 }

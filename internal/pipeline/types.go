@@ -88,6 +88,26 @@ type AnalysisResult struct {
 	Elapsed     time.Duration
 }
 
+// RunRequest is the input to the cascade runner.
+type RunRequest struct {
+	URL                 string
+	APIEndpoint         string
+	JobID               string
+	FetchTimeout        time.Duration // 0 = tier default
+	ExtractionTimeout   time.Duration // 0 = tier default
+}
+
+// RunResult is the normalised output of whichever tier completed the cascade.
+type RunResult struct {
+	JobID            string
+	Tier             int
+	Decision         Decision
+	PageType         PageType
+	Fields           map[string]ExtractedField
+	EscalationReason string
+	Elapsed          time.Duration
+}
+
 // RenderResult is the complete output of Tier 3.
 type RenderResult struct {
 	OriginalRequest    *Request

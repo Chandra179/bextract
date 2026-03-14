@@ -5,10 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-make run          # start the server on :8080 (local Go, requires chromium for Tier 3)
-make docker-up    # build Docker image and start server on :8080 (detached)
+make up           # build Docker image and run docker compose
 make docker-down  # stop and remove containers
-make docker-build # build Docker image only
 make test         # run all tests
 make swag         # regenerate docs/ from Swagger annotations (run after changing annotations)
 make tidy         # go mod tidy

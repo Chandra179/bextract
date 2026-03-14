@@ -3,8 +3,6 @@ package tier2
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -67,7 +65,7 @@ func (a *Analyzer) Analyze(ctx context.Context, resp *pipeline.Response) *pipeli
 	classification := classifyPageWithHints(doc, resp, hints, hollowCfg)
 
 	// Stage 4: Concurrent extraction with timeout.
-	results := a.runExtractors(ctx, doc, resp)
+	results := a.runExtractors(ctx, doc, resp, hollow.IsHollow)
 
 	// Stage 5: Merge and decide.
 	req := resp.OriginalRequest
@@ -77,10 +75,6 @@ func (a *Analyzer) Analyze(ctx context.Context, resp *pipeline.Response) *pipeli
 	result := merge(results, hints, hollow, classification, req, a.cfg.Merge)
 	result.OriginalResponse = resp
 	result.Elapsed = time.Since(start)
-
-	if result.Decision == pipeline.DecisionEscalate {
-		a.logEscalation(ctx, resp, hollow, results, req)
-	}
 
 	return result
 }
@@ -94,47 +88,6 @@ func classifyPageWithHints(doc *goquery.Document, resp *pipeline.Response, hints
 		pc.Confidence = 1.0
 	}
 	return pc
-}
-
-// logEscalation emits a Warn log explaining why tier2 decided to escalate.
-func (a *Analyzer) logEscalation(
-	ctx context.Context,
-	resp *pipeline.Response,
-	hollow hollowResult,
-	results []pipeline.ExtractorResult,
-	req *pipeline.Request,
-) {
-	url := resp.FinalURL
-	if url == "" && resp.OriginalRequest != nil {
-		url = resp.OriginalRequest.URL
-	}
-
-	minConf := a.cfg.Merge.MinConfidence
-	if minConf <= 0 {
-		minConf = 0.50
-	}
-
-	// Collect extractor summaries for debugging.
-	var extractorNotes []string
-	for _, r := range results {
-		if r.Err != nil {
-			extractorNotes = append(extractorNotes, fmt.Sprintf("%s:err(%s)", r.Source, r.Err))
-		} else if r.Confidence < minConf || len(r.Fields) == 0 {
-			extractorNotes = append(extractorNotes, fmt.Sprintf("%s:low(conf=%.2f,fields=%d)", r.Source, r.Confidence, len(r.Fields)))
-		} else {
-			extractorNotes = append(extractorNotes, fmt.Sprintf("%s:ok(%d fields)", r.Source, len(r.Fields)))
-		}
-	}
-
-	fields := []logger.Field{
-		{Key: "url", Value: url},
-		{Key: "hollow", Value: hollow.IsHollow},
-		{Key: "hollow_score", Value: hollow.Score},
-		{Key: "hollow_signals", Value: strings.Join(hollow.Signals, ",")},
-		{Key: "extractors", Value: strings.Join(extractorNotes, " | ")},
-	}
-
-	a.log.Warn(ctx, "tier2: escalating", fields...)
 }
 
 // buildExtractors constructs the extractor list from config.
@@ -181,17 +134,40 @@ func buildExtractors(cfg config.Tier2Config) []Extractor {
 	return out
 }
 
-// runExtractors fans out to all extractors in parallel and collects results.
+// runExtractors fans out to all extractors in two phases and collects results.
+// Phase A runs script-tag sources (priority 1-4: json-ld, next-data, globals, inline-var).
+// Phase B runs the remaining extractors (priority 5-10).
+// If isHollow is true and Phase A yielded any fields, Phase B is skipped entirely.
 func (a *Analyzer) runExtractors(
 	ctx context.Context,
 	doc *goquery.Document,
 	resp *pipeline.Response,
+	isHollow bool,
 ) []pipeline.ExtractorResult {
-	extractors := buildExtractors(a.cfg)
+	all := buildExtractors(a.cfg)
 
 	ctx, cancel := context.WithTimeout(ctx, a.extractionTimeout)
 	defer cancel()
 
+	phaseA := all
+	var phaseB []Extractor
+	if len(all) > 4 {
+		phaseA = all[:4]
+		phaseB = all[4:]
+	}
+
+	aResults := runConcurrent(ctx, phaseA, doc, resp)
+
+	// Early exit: hollow page with script-tag data found — skip DOM-heavy Phase B.
+	if isHollow && anyFields(aResults) {
+		return aResults
+	}
+
+	bResults := runConcurrent(ctx, phaseB, doc, resp)
+	return append(aResults, bResults...)
+}
+
+func runConcurrent(ctx context.Context, extractors []Extractor, doc *goquery.Document, resp *pipeline.Response) []pipeline.ExtractorResult {
 	results := make(chan pipeline.ExtractorResult, len(extractors))
 	var wg sync.WaitGroup
 	for _, ex := range extractors {
@@ -209,4 +185,13 @@ func (a *Analyzer) runExtractors(
 		out = append(out, r)
 	}
 	return out
+}
+
+func anyFields(results []pipeline.ExtractorResult) bool {
+	for _, r := range results {
+		if len(r.Fields) > 0 {
+			return true
+		}
+	}
+	return false
 }

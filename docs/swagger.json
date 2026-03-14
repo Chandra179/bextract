@@ -20,9 +20,9 @@
     "host": "localhost:8080",
     "basePath": "/api/v1",
     "paths": {
-        "/tier1/fetch": {
+        "/extract": {
             "post": {
-                "description": "Performs a plain HTTP GET (or fetches an API endpoint directly)\nusing a rotating User-Agent pool. No JavaScript execution.",
+                "description": "Fetches the URL and cascades through Tier 1 → Tier 2 → Tier 3 → Tier 4, stopping at the first non-Escalate decision.",
                 "consumes": [
                     "application/json"
                 ],
@@ -30,17 +30,17 @@
                     "application/json"
                 ],
                 "tags": [
-                    "tier1"
+                    "extract"
                 ],
-                "summary": "Tier 1 static HTTP fetch",
+                "summary": "Full extraction cascade",
                 "parameters": [
                     {
-                        "description": "Fetch parameters",
+                        "description": "Extraction parameters",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tier1handler.FetchRequest"
+                            "$ref": "#/definitions/api.ExtractRequest"
                         }
                     }
                 ],
@@ -48,123 +48,19 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tier1handler.FetchResponse"
+                            "$ref": "#/definitions/api.ExtractResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/tier1handler.ErrorResponse"
+                            "$ref": "#/definitions/api.ErrorResponse"
                         }
                     },
                     "502": {
                         "description": "Bad Gateway",
                         "schema": {
-                            "$ref": "#/definitions/tier1handler.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tier2/analyze": {
-            "post": {
-                "description": "Fetches the URL via Tier 1 then runs the full Tier 2 five-stage pipeline:\nheader analysis, HTML parse, hollow detection, concurrent extraction, and merge.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tier2"
-                ],
-                "summary": "Tier 2 content detection \u0026 extraction",
-                "parameters": [
-                    {
-                        "description": "Analyze parameters",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/tier2handler.AnalyzeRequest"
-                        }
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Include diagnostic debug info",
-                        "name": "debug",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/tier2handler.AnalyzeResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/tier2handler.ErrorResponse"
-                        }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
-                        "schema": {
-                            "$ref": "#/definitions/tier2handler.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tier3/render": {
-            "post": {
-                "description": "Fetches the URL via Tier 1, runs Tier 2 analysis, and — if Tier 2 returns Escalate —\nrenders the page in a headless Chrome instance and re-runs Tier 2 on the rendered DOM.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tier3"
-                ],
-                "summary": "Tier 3 browser render \u0026 extraction",
-                "parameters": [
-                    {
-                        "description": "Render parameters",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/tier3handler.RenderRequest"
-                        }
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Include diagnostic debug info",
-                        "name": "debug",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/tier3handler.RenderResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/tier3handler.ErrorResponse"
-                        }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
-                        "schema": {
-                            "$ref": "#/definitions/tier3handler.ErrorResponse"
+                            "$ref": "#/definitions/api.ErrorResponse"
                         }
                     }
                 }
@@ -172,7 +68,7 @@
         }
     },
     "definitions": {
-        "tier1handler.ErrorResponse": {
+        "api.ErrorResponse": {
             "description": "Error detail returned on failure.",
             "type": "object",
             "properties": {
@@ -182,92 +78,8 @@
                 }
             }
         },
-        "tier1handler.FetchRequest": {
-            "description": "Target URL and optional overrides for the Tier 1 static fetch.",
-            "type": "object",
-            "required": [
-                "url"
-            ],
-            "properties": {
-                "api_endpoint": {
-                    "type": "string",
-                    "example": "https://api.example.com/data"
-                },
-                "job_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "timeout_ms": {
-                    "type": "integer",
-                    "example": 5000
-                },
-                "url": {
-                    "type": "string",
-                    "example": "https://example.com"
-                }
-            }
-        },
-        "tier1handler.FetchResponse": {
-            "description": "Raw HTTP response metadata and body returned by Tier 1.",
-            "type": "object",
-            "properties": {
-                "body": {
-                    "type": "string",
-                    "example": "\u003chtml\u003e...\u003c/html\u003e"
-                },
-                "body_size": {
-                    "type": "integer",
-                    "example": 14823
-                },
-                "content_type": {
-                    "type": "string",
-                    "example": "text/html"
-                },
-                "elapsed_ms": {
-                    "type": "integer",
-                    "example": 342
-                },
-                "final_url": {
-                    "type": "string",
-                    "example": "https://example.com/"
-                },
-                "headers": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "job_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "status_code": {
-                    "type": "integer",
-                    "example": 200
-                }
-            }
-        },
-        "tier2handler.AnalyzeDebug": {
-            "description": "Internal diagnostic data for Tier 2 analysis (debug mode only).",
-            "type": "object",
-            "properties": {
-                "fields": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/tier2handler.FieldDebugResponse"
-                    }
-                },
-                "hollow_score": {
-                    "type": "number",
-                    "example": 0.12
-                },
-                "tech_hints": {
-                    "$ref": "#/definitions/tier2handler.TechHintsResponse"
-                }
-            }
-        },
-        "tier2handler.AnalyzeRequest": {
-            "description": "URL and optional configuration for Tier 2 analysis.",
+        "api.ExtractRequest": {
+            "description": "URL and optional per-request timeout overrides for the full extraction cascade.",
             "type": "object",
             "required": [
                 "url"
@@ -295,225 +107,10 @@
                 }
             }
         },
-        "tier2handler.AnalyzeResponse": {
-            "description": "Tier 2 analysis result including decision, page type, and extracted fields.",
+        "api.ExtractResponse": {
+            "description": "Extract result including which tier produced the final result, the decision, page type, and extracted fields.",
             "type": "object",
             "properties": {
-                "debug": {
-                    "description": "populated only when ?debug=true",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/tier2handler.AnalyzeDebug"
-                        }
-                    ]
-                },
-                "decision": {
-                    "type": "string",
-                    "example": "Done"
-                },
-                "elapsed_ms": {
-                    "type": "integer",
-                    "example": 87
-                },
-                "fields": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/tier2handler.FieldResponse"
-                    }
-                },
-                "job_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "page_type": {
-                    "type": "string",
-                    "example": "content-rich"
-                },
-                "page_type_confidence": {
-                    "type": "number",
-                    "example": 0.88
-                }
-            }
-        },
-        "tier2handler.ErrorResponse": {
-            "description": "Error detail returned on failure.",
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string",
-                    "example": "dial tcp: connection refused"
-                }
-            }
-        },
-        "tier2handler.FieldDebugResponse": {
-            "description": "A data field with full provenance metadata (debug only).",
-            "type": "object",
-            "properties": {
-                "confidence": {
-                    "type": "number",
-                    "example": 0.95
-                },
-                "priority": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "source": {
-                    "type": "string",
-                    "example": "json-ld"
-                },
-                "value": {
-                    "type": "string",
-                    "example": "29.99"
-                }
-            }
-        },
-        "tier2handler.FieldResponse": {
-            "description": "A data field extracted by Tier 2.",
-            "type": "object",
-            "properties": {
-                "source": {
-                    "type": "string",
-                    "example": "json-ld"
-                },
-                "value": {
-                    "type": "string",
-                    "example": "29.99"
-                }
-            }
-        },
-        "tier2handler.TechHintsResponse": {
-            "description": "Technology fingerprints detected from HTTP headers.",
-            "type": "object",
-            "properties": {
-                "cf_challenge": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "is_cloudflare": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "is_json": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "is_nextjs": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "is_php": {
-                    "type": "boolean",
-                    "example": false
-                }
-            }
-        },
-        "tier3handler.ErrorResponse": {
-            "description": "Error detail returned on failure.",
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string",
-                    "example": "dial tcp: connection refused"
-                }
-            }
-        },
-        "tier3handler.FieldDebugResponse": {
-            "description": "A data field with full provenance metadata (debug only).",
-            "type": "object",
-            "properties": {
-                "confidence": {
-                    "type": "number",
-                    "example": 0.95
-                },
-                "priority": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "source": {
-                    "type": "string",
-                    "example": "json-ld"
-                },
-                "value": {
-                    "type": "string",
-                    "example": "29.99"
-                }
-            }
-        },
-        "tier3handler.FieldResponse": {
-            "description": "A data field extracted by Tier 2 running on the rendered DOM.",
-            "type": "object",
-            "properties": {
-                "source": {
-                    "type": "string",
-                    "example": "json-ld"
-                },
-                "value": {
-                    "type": "string",
-                    "example": "29.99"
-                }
-            }
-        },
-        "tier3handler.RenderDebug": {
-            "description": "Internal diagnostic data for Tier 3 rendering (debug mode only).",
-            "type": "object",
-            "properties": {
-                "fields": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/tier3handler.FieldDebugResponse"
-                    }
-                },
-                "hollow_score": {
-                    "type": "number",
-                    "example": 0.1
-                }
-            }
-        },
-        "tier3handler.RenderRequest": {
-            "description": "URL and optional configuration for Tier 3 browser rendering.",
-            "type": "object",
-            "required": [
-                "url"
-            ],
-            "properties": {
-                "api_endpoint": {
-                    "type": "string",
-                    "example": "https://api.example.com/product/123"
-                },
-                "extraction_timeout_ms": {
-                    "type": "integer",
-                    "example": 5000
-                },
-                "fetch_timeout_ms": {
-                    "type": "integer",
-                    "example": 10000
-                },
-                "job_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "render_timeout_ms": {
-                    "type": "integer",
-                    "example": 8000
-                },
-                "url": {
-                    "type": "string",
-                    "example": "https://example.com/product/123"
-                }
-            }
-        },
-        "tier3handler.RenderResponse": {
-            "description": "Tier 3 render result including decision, page type, escalation reason, and extracted fields.",
-            "type": "object",
-            "properties": {
-                "debug": {
-                    "description": "populated only when ?debug=true",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/tier3handler.RenderDebug"
-                        }
-                    ]
-                },
                 "decision": {
                     "type": "string",
                     "example": "Done"
@@ -529,7 +126,7 @@
                 "fields": {
                     "type": "object",
                     "additionalProperties": {
-                        "$ref": "#/definitions/tier3handler.FieldResponse"
+                        "$ref": "#/definitions/api.FieldResponse"
                     }
                 },
                 "job_id": {
@@ -540,9 +137,23 @@
                     "type": "string",
                     "example": "content-rich"
                 },
-                "page_type_confidence": {
-                    "type": "number",
-                    "example": 0.9
+                "tier": {
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "api.FieldResponse": {
+            "description": "A data field extracted from the page.",
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "example": "json-ld"
+                },
+                "value": {
+                    "type": "string",
+                    "example": "29.99"
                 }
             }
         }

@@ -11,6 +11,7 @@ type Config struct {
 	Tier1    Tier1Config    `yaml:"tier1"`
 	Tier2    Tier2Config    `yaml:"tier2"`
 	Tier3    Tier3Config    `yaml:"tier3"`
+	Tier4    Tier4Config    `yaml:"tier4"`
 	ArangoDB ArangoDBConfig `yaml:"arangodb"`
 }
 
@@ -20,7 +21,6 @@ type ArangoDBConfig struct {
 	Database string `yaml:"database"` // e.g. "bextract"
 	Username string `yaml:"username"`
 	Password string `yaml:"password"` // override via ARANGO_PASSWORD env var
-	Enabled  bool   `yaml:"enabled"`
 }
 
 // Tier1Config holds Tier 1 (plain HTTP fetch) tuning parameters.
@@ -54,6 +54,13 @@ type MergeConfig struct {
 type ExtractorConfig struct {
 	Enabled    bool    `yaml:"enabled"`
 	Confidence float64 `yaml:"confidence"`
+}
+
+// Tier4Config holds Tier 4 (Browserless remote CDP) tuning parameters.
+type Tier4Config struct {
+	BrowserlessURL  string   `yaml:"browserless_url"`   // ws://localhost:3000
+	RenderTimeoutMs int      `yaml:"render_timeout_ms"` // 15000
+	BlockDomains    []string `yaml:"block_domains"`
 }
 
 // Tier3Config holds Tier 3 (headless Chrome) tuning parameters.
@@ -106,7 +113,16 @@ func Defaults() *Config {
 			Host:     "http://localhost:8529",
 			Database: "bextract",
 			Username: "root",
-			Enabled:  true,
+		},
+		Tier4: Tier4Config{
+			RenderTimeoutMs: 15000,
+			BlockDomains: []string{
+				"*google-analytics.com*",
+				"*googletagmanager.com*",
+				"*doubleclick.net*",
+				"*facebook.com/tr*",
+				"*hotjar.com*",
+			},
 		},
 		Tier3: Tier3Config{
 			PoolSize:        2,

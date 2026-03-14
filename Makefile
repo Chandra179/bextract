@@ -1,12 +1,8 @@
 .PHONY: run build test clean tidy swag docker-build docker-up docker-down
 
-## docker-build: build the Docker image
-docker-build:
-	docker compose build
-
 ## docker-up: start the server in Docker (detached)
-docker-up:
-	docker compose up -d
+up:
+	docker compose up --build -d
 
 ## docker-down: stop and remove Docker containers
 docker-down:

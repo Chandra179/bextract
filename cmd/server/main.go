@@ -19,7 +19,7 @@ import (
 	"log"
 	"os"
 
-	"bextract/internal/api/router"
+	internal "bextract/internal"
 	"bextract/internal/config"
 	"bextract/pkg/logger"
 	"bextract/pkg/store"
@@ -39,27 +39,22 @@ func main() {
 	if host := os.Getenv("ARANGO_HOST"); host != "" {
 		cfg.ArangoDB.Host = host
 	}
-
-	// Allow env override for ArangoDB password.
 	if pw := os.Getenv("ARANGO_PASSWORD"); pw != "" {
 		cfg.ArangoDB.Password = pw
 	}
 
-	env := os.Getenv("APP_ENV")
-	appLog := logger.NewLogger(env)
+	appLog := logger.NewLogger(os.Getenv("APP_ENV"))
 
 	ctx := context.Background()
 	var st store.Store
-	if cfg.ArangoDB.Enabled {
-		st, err = store.NewArangoStore(ctx, cfg.ArangoDB.Host, cfg.ArangoDB.Database,
-			cfg.ArangoDB.Username, cfg.ArangoDB.Password)
-		if err != nil {
-			log.Fatalf("failed to connect to ArangoDB at %s: %v", cfg.ArangoDB.Host, err)
-		}
-	} else {
-		st = &store.NoopStore{}
+
+	st, err = store.NewArangoStore(ctx, cfg.ArangoDB.Host, cfg.ArangoDB.Database,
+		cfg.ArangoDB.Username, cfg.ArangoDB.Password)
+	if err != nil {
+		log.Fatalf("failed to connect to ArangoDB at %s: %v", cfg.ArangoDB.Host, err)
 	}
 
-	r := router.New(cfg, appLog, st)
-	r.Run("0.0.0.0:8080")
+	if err := internal.Run(cfg, appLog, st, "0.0.0.0:8080"); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
 }

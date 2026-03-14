@@ -112,6 +112,18 @@ func (s *ArangoStore) SaveTier3(ctx context.Context, jobID string, r *Tier3Resul
 	return err
 }
 
+func (s *ArangoStore) SaveTier4(ctx context.Context, jobID string, r *Tier4Result) error {
+	patch := map[string]interface{}{
+		"tier4":          r,
+		"updated_at":     time.Now().UTC(),
+		"status":         JobStatusTier4Complete,
+		"final_decision": r.Decision,
+		"final_fields":   r.Fields,
+	}
+	_, err := s.col.UpdateDocument(ctx, jobID, patch)
+	return err
+}
+
 func (s *ArangoStore) GetJob(ctx context.Context, jobID string) (*ExtractionJob, error) {
 	var job ExtractionJob
 	_, err := s.col.ReadDocument(ctx, jobID, &job)

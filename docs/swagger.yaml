@@ -1,74 +1,15 @@
 basePath: /api/v1
 definitions:
-  tier1handler.ErrorResponse:
+  api.ErrorResponse:
     description: Error detail returned on failure.
     properties:
       error:
         example: 'dial tcp: connection refused'
         type: string
     type: object
-  tier1handler.FetchRequest:
-    description: Target URL and optional overrides for the Tier 1 static fetch.
-    properties:
-      api_endpoint:
-        example: https://api.example.com/data
-        type: string
-      job_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      timeout_ms:
-        example: 5000
-        type: integer
-      url:
-        example: https://example.com
-        type: string
-    required:
-    - url
-    type: object
-  tier1handler.FetchResponse:
-    description: Raw HTTP response metadata and body returned by Tier 1.
-    properties:
-      body:
-        example: <html>...</html>
-        type: string
-      body_size:
-        example: 14823
-        type: integer
-      content_type:
-        example: text/html
-        type: string
-      elapsed_ms:
-        example: 342
-        type: integer
-      final_url:
-        example: https://example.com/
-        type: string
-      headers:
-        additionalProperties:
-          type: string
-        type: object
-      job_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      status_code:
-        example: 200
-        type: integer
-    type: object
-  tier2handler.AnalyzeDebug:
-    description: Internal diagnostic data for Tier 2 analysis (debug mode only).
-    properties:
-      fields:
-        additionalProperties:
-          $ref: '#/definitions/tier2handler.FieldDebugResponse'
-        type: object
-      hollow_score:
-        example: 0.12
-        type: number
-      tech_hints:
-        $ref: '#/definitions/tier2handler.TechHintsResponse'
-    type: object
-  tier2handler.AnalyzeRequest:
-    description: URL and optional configuration for Tier 2 analysis.
+  api.ExtractRequest:
+    description: URL and optional per-request timeout overrides for the full extraction
+      cascade.
     properties:
       api_endpoint:
         example: https://api.example.com/product/123
@@ -88,162 +29,10 @@ definitions:
     required:
     - url
     type: object
-  tier2handler.AnalyzeResponse:
-    description: Tier 2 analysis result including decision, page type, and extracted
-      fields.
+  api.ExtractResponse:
+    description: Extract result including which tier produced the final result, the
+      decision, page type, and extracted fields.
     properties:
-      debug:
-        allOf:
-        - $ref: '#/definitions/tier2handler.AnalyzeDebug'
-        description: populated only when ?debug=true
-      decision:
-        example: Done
-        type: string
-      elapsed_ms:
-        example: 87
-        type: integer
-      fields:
-        additionalProperties:
-          $ref: '#/definitions/tier2handler.FieldResponse'
-        type: object
-      job_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      page_type:
-        example: content-rich
-        type: string
-      page_type_confidence:
-        example: 0.88
-        type: number
-    type: object
-  tier2handler.ErrorResponse:
-    description: Error detail returned on failure.
-    properties:
-      error:
-        example: 'dial tcp: connection refused'
-        type: string
-    type: object
-  tier2handler.FieldDebugResponse:
-    description: A data field with full provenance metadata (debug only).
-    properties:
-      confidence:
-        example: 0.95
-        type: number
-      priority:
-        example: 1
-        type: integer
-      source:
-        example: json-ld
-        type: string
-      value:
-        example: "29.99"
-        type: string
-    type: object
-  tier2handler.FieldResponse:
-    description: A data field extracted by Tier 2.
-    properties:
-      source:
-        example: json-ld
-        type: string
-      value:
-        example: "29.99"
-        type: string
-    type: object
-  tier2handler.TechHintsResponse:
-    description: Technology fingerprints detected from HTTP headers.
-    properties:
-      cf_challenge:
-        example: false
-        type: boolean
-      is_cloudflare:
-        example: false
-        type: boolean
-      is_json:
-        example: false
-        type: boolean
-      is_nextjs:
-        example: true
-        type: boolean
-      is_php:
-        example: false
-        type: boolean
-    type: object
-  tier3handler.ErrorResponse:
-    description: Error detail returned on failure.
-    properties:
-      error:
-        example: 'dial tcp: connection refused'
-        type: string
-    type: object
-  tier3handler.FieldDebugResponse:
-    description: A data field with full provenance metadata (debug only).
-    properties:
-      confidence:
-        example: 0.95
-        type: number
-      priority:
-        example: 1
-        type: integer
-      source:
-        example: json-ld
-        type: string
-      value:
-        example: "29.99"
-        type: string
-    type: object
-  tier3handler.FieldResponse:
-    description: A data field extracted by Tier 2 running on the rendered DOM.
-    properties:
-      source:
-        example: json-ld
-        type: string
-      value:
-        example: "29.99"
-        type: string
-    type: object
-  tier3handler.RenderDebug:
-    description: Internal diagnostic data for Tier 3 rendering (debug mode only).
-    properties:
-      fields:
-        additionalProperties:
-          $ref: '#/definitions/tier3handler.FieldDebugResponse'
-        type: object
-      hollow_score:
-        example: 0.1
-        type: number
-    type: object
-  tier3handler.RenderRequest:
-    description: URL and optional configuration for Tier 3 browser rendering.
-    properties:
-      api_endpoint:
-        example: https://api.example.com/product/123
-        type: string
-      extraction_timeout_ms:
-        example: 5000
-        type: integer
-      fetch_timeout_ms:
-        example: 10000
-        type: integer
-      job_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      render_timeout_ms:
-        example: 8000
-        type: integer
-      url:
-        example: https://example.com/product/123
-        type: string
-    required:
-    - url
-    type: object
-  tier3handler.RenderResponse:
-    description: Tier 3 render result including decision, page type, escalation reason,
-      and extracted fields.
-    properties:
-      debug:
-        allOf:
-        - $ref: '#/definitions/tier3handler.RenderDebug'
-        description: populated only when ?debug=true
       decision:
         example: Done
         type: string
@@ -255,7 +44,7 @@ definitions:
         type: string
       fields:
         additionalProperties:
-          $ref: '#/definitions/tier3handler.FieldResponse'
+          $ref: '#/definitions/api.FieldResponse'
         type: object
       job_id:
         example: 550e8400-e29b-41d4-a716-446655440000
@@ -263,9 +52,19 @@ definitions:
       page_type:
         example: content-rich
         type: string
-      page_type_confidence:
-        example: 0.9
-        type: number
+      tier:
+        example: 2
+        type: integer
+    type: object
+  api.FieldResponse:
+    description: A data field extracted from the page.
+    properties:
+      source:
+        example: json-ld
+        type: string
+      value:
+        example: "29.99"
+        type: string
     type: object
 host: localhost:8080
 info:
@@ -280,110 +79,37 @@ info:
   title: bextract API
   version: "1.0"
 paths:
-  /tier1/fetch:
+  /extract:
     post:
       consumes:
       - application/json
-      description: |-
-        Performs a plain HTTP GET (or fetches an API endpoint directly)
-        using a rotating User-Agent pool. No JavaScript execution.
+      description: Fetches the URL and cascades through Tier 1 → Tier 2 → Tier 3 →
+        Tier 4, stopping at the first non-Escalate decision.
       parameters:
-      - description: Fetch parameters
+      - description: Extraction parameters
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/tier1handler.FetchRequest'
+          $ref: '#/definitions/api.ExtractRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/tier1handler.FetchResponse'
+            $ref: '#/definitions/api.ExtractResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/tier1handler.ErrorResponse'
+            $ref: '#/definitions/api.ErrorResponse'
         "502":
           description: Bad Gateway
           schema:
-            $ref: '#/definitions/tier1handler.ErrorResponse'
-      summary: Tier 1 static HTTP fetch
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Full extraction cascade
       tags:
-      - tier1
-  /tier2/analyze:
-    post:
-      consumes:
-      - application/json
-      description: |-
-        Fetches the URL via Tier 1 then runs the full Tier 2 five-stage pipeline:
-        header analysis, HTML parse, hollow detection, concurrent extraction, and merge.
-      parameters:
-      - description: Analyze parameters
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/tier2handler.AnalyzeRequest'
-      - description: Include diagnostic debug info
-        in: query
-        name: debug
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/tier2handler.AnalyzeResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/tier2handler.ErrorResponse'
-        "502":
-          description: Bad Gateway
-          schema:
-            $ref: '#/definitions/tier2handler.ErrorResponse'
-      summary: Tier 2 content detection & extraction
-      tags:
-      - tier2
-  /tier3/render:
-    post:
-      consumes:
-      - application/json
-      description: |-
-        Fetches the URL via Tier 1, runs Tier 2 analysis, and — if Tier 2 returns Escalate —
-        renders the page in a headless Chrome instance and re-runs Tier 2 on the rendered DOM.
-      parameters:
-      - description: Render parameters
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/tier3handler.RenderRequest'
-      - description: Include diagnostic debug info
-        in: query
-        name: debug
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/tier3handler.RenderResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/tier3handler.ErrorResponse'
-        "502":
-          description: Bad Gateway
-          schema:
-            $ref: '#/definitions/tier3handler.ErrorResponse'
-      summary: Tier 3 browser render & extraction
-      tags:
-      - tier3
+      - extract
 schemes:
 - http
 - https
