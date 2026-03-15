@@ -105,18 +105,24 @@ All extractors run **simultaneously in separate goroutines**. They all receive t
 ### Two-Phase Grouping
 
 ```
-Phase A — High-signal, near-instant (run first):
-  JSON-LD, __NEXT_DATA__, Meta Tags
+Phase A — Script-tag sources (run first, priorities 1–4):
+  JSON-LD, __NEXT_DATA__, Framework State Globals, Inline Variables
 
-  → If all required fields are satisfied by Phase A results:
-    skip Phase B entirely
+  → If page is hollow AND Phase A yielded any fields:
+    skip Phase B entirely (structured script data is sufficient)
 
-Phase B — Slower / noisier (run only if Phase A is insufficient):
-  Framework globals, inline variables, data attributes,
-  hidden inputs, CSS-hidden elements, DOM text
+Phase B — DOM-heavy sources (run only if Phase A is insufficient):
+  Meta Tags, Microdata, Data Attributes,
+  Hidden Inputs, CSS-Hidden Elements, DOM Text
 ```
 
-Most pages that have `JSON-LD` or `__NEXT_DATA__` won't need Phase B at all. This saves goroutine overhead on the noisier extractors for the majority of requests.
+Hollow pages (JS shells) rarely have useful data in the DOM itself but often carry full data payloads in `<script>` tags. When Phase A finds fields on a hollow page, running DOM-heavy Phase B extractors would add latency for no benefit.
+
+**Phase C — LLM semantic fallback (fires after merge, not concurrent):**
+
+When structured extraction (Phases A + B) yields zero fields and the decision is `Escalate`, the pipeline optionally invokes an LLM against the page's cleaned text. This is disabled by default and controlled by `tier2.llm.enabled` in config.
+
+See the [LLM Phase C](#llm-phase-c--semantic-fallback-priority-11--confidence-configurable) section below.
 
 ---
 
@@ -222,7 +228,7 @@ The value may be JavaScript syntax that isn't valid JSON. Regex extraction is br
 
 ---
 
-#### B1 — Meta Tags `Priority 5 · Confidence 0.80`
+#### B1 — Meta Tags `Priority 5 · Confidence 0.88`
 
 **Location:** `<head>` section
 
@@ -250,7 +256,7 @@ Sites break their CSS regularly. They rarely break their Open Graph tags because
 
 ---
 
-#### B2 — Microdata / Schema.org `Priority 6 · Confidence 0.78`
+#### B2 — Microdata / Schema.org `Priority 6 · Confidence 0.82`
 
 **Location:** Scattered throughout the body as HTML attributes
 
@@ -271,7 +277,7 @@ The same schema fields are available, but Microdata is harder to parse correctly
 
 ---
 
-#### B3 — Data Attributes `Priority 7 · Confidence 0.72`
+#### B3 — Data Attributes `Priority 7 · Confidence 0.78`
 
 **Location:** Any DOM element, typically on product/listing containers
 
@@ -291,7 +297,7 @@ Example: A product card may have `data-sku="ABC123"`, `data-price="29.99"`, `dat
 
 ---
 
-#### B4 — Hidden Inputs `Priority 8 · Confidence 0.65`
+#### B4 — Hidden Inputs `Priority 8 · Confidence 0.72`
 
 **Location:** `<input type="hidden">` elements
 
@@ -309,7 +315,7 @@ Good for IDs and internal tokens. Poor for content fields like title, descriptio
 
 ---
 
-#### C1 — CSS-Hidden Elements `Priority 9 · Confidence 0.55`
+#### C1 — CSS-Hidden Elements `Priority 9 · Confidence 0.60`
 
 **Location:** Elements with inline `display:none` or `visibility:hidden`
 
@@ -333,7 +339,7 @@ The field name is inferred from CSS class names, which are not semantic. `class=
 
 ---
 
-#### E1 — DOM Text (Fallback) `Priority 10 · Confidence 0.60`
+#### E1 — DOM Text (Fallback) `Priority 10 · Confidence 0.55`
 
 **Location:** Visible text nodes matched by CSS selectors
 
@@ -357,6 +363,39 @@ Extracts text content from DOM elements using a **caller-supplied CSS selector m
 CSS class names change with every frontend redesign. A selector that works today may return nothing after the site ships a new UI. This extractor requires active maintenance per domain.
 
 If data has been found by any higher-priority extractor, the merger will prefer that source over DOM text even when both are present.
+
+---
+
+#### LLM Phase C — Semantic Fallback `Priority 11 · Confidence configurable (default 0.70)`
+
+**When it fires:** After the Stage 5 merge, **only** when:
+1. Structured extraction (Phases A + B) yielded zero fields, AND
+2. The merge decision is `Escalate`
+
+**Disabled by default.** Enable with `tier2.llm.enabled: true` in config. Requires `ANTHROPIC_API_KEY` env var or `tier2.llm.api_key` in config.
+
+**What it does:**
+1. Runs `go-readability` on the shared `goquery.Document` to extract clean article text (strips nav, ads, boilerplate)
+2. Truncates the text to `max_text_bytes` (default 4000) to control token cost
+3. Sends the text to the configured model (default `claude-haiku-4-5`) with a structured extraction prompt
+4. Parses the JSON response into a field map
+5. If fields are returned, flips the decision from `Escalate` to `Done`
+
+**Config knobs:**
+
+| Key | Default | Purpose |
+|---|---|---|
+| `llm.enabled` | `false` | Must be explicitly enabled |
+| `llm.model` | `claude-haiku-4-5` | Model to use; Haiku is the cost-optimised choice |
+| `llm.max_tokens` | `512` | Sufficient for a flat JSON field map |
+| `llm.timeout_ms` | `15000` | Separate timeout from the 5s extraction timeout |
+| `llm.max_text_bytes` | `4000` | ~1000 tokens; controls per-request LLM cost |
+| `llm.confidence` | `0.70` | Applied to all LLM-extracted fields |
+
+**Cost implication:** Each LLM call adds ~$0.0001–0.001 per request at Haiku pricing depending on page text length. Phase C only fires when all structured extractors returned nothing, so it is rare in practice.
+
+**Why it's Priority 11 (lowest):**
+LLM extraction is always the last resort. It cannot distinguish between semantically similar fields with the precision of JSON-LD or structured data formats, and its output is model-dependent. Any structured extractor that succeeds at any priority will always win.
 
 ---
 
@@ -549,17 +588,18 @@ HTTP Response (from Tier 1)
 
 ## Extractor Priority Quick Reference
 
-| Priority | Extractor | Location | Confidence |
-|---|---|---|---|
-| 1 | JSON-LD | `<script type="application/ld+json">` | 0.95 |
-| 2 | `__NEXT_DATA__` | `<script id="__NEXT_DATA__">` | 0.92 |
-| 3 | State Globals | `window.__REDUX_STATE__` etc. | 0.85 |
-| 4 | Inline Variables | `var x = {...}` in `<script>` | 0.75 |
-| 5 | Meta Tags | `<head>` `og:*`, `twitter:*` | 0.80 |
-| 6 | Microdata | `itemprop`, `itemscope`, `property` | 0.78 |
-| 7 | Data Attributes | `data-*` on DOM elements | 0.72 |
-| 8 | Hidden Inputs | `<input type="hidden">` | 0.65 |
-| 9 | CSS-Hidden Elements | `display:none` elements | 0.55 |
-| 10 | DOM Text | CSS selector → text content | 0.60 |
+| Priority | Phase | Extractor | Location | Confidence |
+|---|---|---|---|---|
+| 1 | A | JSON-LD | `<script type="application/ld+json">` | 0.95 |
+| 2 | A | `__NEXT_DATA__` | `<script id="__NEXT_DATA__">` | 0.92 |
+| 3 | A | State Globals | `window.__REDUX_STATE__` etc. | 0.85 |
+| 4 | A | Inline Variables | `var x = {...}` in `<script>` | 0.75 |
+| 5 | B | Meta Tags | `<head>` `og:*`, `twitter:*` | 0.88 |
+| 6 | B | Microdata | `itemprop`, `itemscope`, `property` | 0.82 |
+| 7 | B | Data Attributes | `data-*` on DOM elements | 0.78 |
+| 8 | B | Hidden Inputs | `<input type="hidden">` | 0.72 |
+| 9 | B | CSS-Hidden Elements | `display:none` elements | 0.60 |
+| 10 | B | DOM Text | CSS selector → text content | 0.55 |
+| 11 | C | LLM Semantic Fallback | `go-readability` clean text → LLM | 0.70 (configurable) |
 
 ---

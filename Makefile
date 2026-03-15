@@ -4,9 +4,8 @@
 up:
 	docker compose up --build -d
 
-## docker-down: stop and remove Docker containers
-docker-down:
-	docker compose down
+run:
+	docker compose up -d
 
 ## test: run all tests
 test:

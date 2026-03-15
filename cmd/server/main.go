@@ -42,6 +42,10 @@ func main() {
 	if pw := os.Getenv("ARANGO_PASSWORD"); pw != "" {
 		cfg.ArangoDB.Password = pw
 	}
+	if u := os.Getenv("BROWSERLESS_URL"); u != "" {
+		cfg.Tier4.BrowserlessURL = u
+		cfg.Tier3.BrowserlessURL = u
+	}
 
 	appLog := logger.NewLogger(os.Getenv("APP_ENV"))
 

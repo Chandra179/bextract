@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 make up           # build Docker image and run docker compose
-make docker-down  # stop and remove containers
+make run          # run detach
 make test         # run all tests
 make swag         # regenerate docs/ from Swagger annotations (run after changing annotations)
 make tidy         # go mod tidy

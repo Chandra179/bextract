@@ -85,6 +85,7 @@ type AnalysisResult struct {
 	HollowScore float64
 	TechHints   TechHints
 	Fields      map[string]ExtractedField
+	CleanText   string        // readable article text produced by go-readability during Phase C
 	Elapsed     time.Duration
 }
 

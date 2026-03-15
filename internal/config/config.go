@@ -34,6 +34,18 @@ type Tier2Config struct {
 	Hollow              HollowConfig               `yaml:"hollow"`
 	Merge               MergeConfig                `yaml:"merge"`
 	Extractors          map[string]ExtractorConfig `yaml:"extractors"`
+	LLM                 LLMConfig                  `yaml:"llm"`
+}
+
+// LLMConfig holds parameters for the Phase C LLM semantic extraction fallback.
+type LLMConfig struct {
+	Enabled      bool    `yaml:"enabled"`        // default false
+	APIKey       string  `yaml:"api_key"`        // fallback: ANTHROPIC_API_KEY env var
+	Model        string  `yaml:"model"`          // default "claude-haiku-4-5"
+	TimeoutMs    int     `yaml:"timeout_ms"`     // default 15000
+	MaxTokens    int     `yaml:"max_tokens"`     // default 512
+	MaxTextBytes int     `yaml:"max_text_bytes"` // default 4000
+	Confidence   float64 `yaml:"confidence"`     // default 0.70
 }
 
 // HollowConfig holds parameters for the hollow/page-type classifier.
@@ -65,6 +77,7 @@ type Tier4Config struct {
 
 // Tier3Config holds Tier 3 (headless Chrome) tuning parameters.
 type Tier3Config struct {
+	BrowserlessURL  string   `yaml:"browserless_url"`   // if set, use this CDP endpoint instead of launching local Chrome
 	PoolSize        int      `yaml:"pool_size"`         // 2
 	RenderTimeoutMs int      `yaml:"render_timeout_ms"` // 8000
 	BlockResources  []string `yaml:"block_resources"`   // stylesheet, image, media, font
@@ -79,6 +92,14 @@ func Defaults() *Config {
 		},
 		Tier2: Tier2Config{
 			ExtractionTimeoutMs: 5000,
+			LLM: LLMConfig{
+				Enabled:      false,
+				Model:        "claude-haiku-4-5",
+				TimeoutMs:    15000,
+				MaxTokens:    512,
+				MaxTextBytes: 4000,
+				Confidence:   0.70,
+			},
 			Hollow: HollowConfig{
 				Threshold:        0.70,
 				LinkRichMinLinks: 10,

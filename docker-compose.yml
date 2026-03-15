@@ -14,21 +14,39 @@ services:
       retries: 5
       start_period: 30s
 
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - TIMEOUT=0
+      - CONCURRENT=5
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/pressure"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   bextract:
     build: .
     ports:
       - "8080:8080"
+    shm_size: '256mb'
     security_opt:
       - seccomp:unconfined
     environment:
       - GIN_MODE=release
       - ROD_BROWSER_BIN=/usr/bin/chromium
-      - ARANGO_HOST=http://arangodb:8529  # <--- Add this
+      - ARANGO_HOST=http://arangodb:8529
       - ARANGO_PASSWORD=admin
+      - BROWSERLESS_URL=ws://browserless:3000/chromium
     volumes:
       - ./config.yaml:/app/config.yaml
     depends_on:
       arangodb:
+        condition: service_healthy
+      browserless:
         condition: service_healthy
 
 volumes:

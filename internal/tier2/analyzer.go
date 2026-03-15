@@ -3,11 +3,13 @@ package tier2
 import (
 	"bytes"
 	"context"
+	"os"
 	"sync"
 	"time"
 
 	"bextract/internal/config"
 	"bextract/internal/pipeline"
+	"bextract/pkg/llm"
 	"bextract/pkg/logger"
 
 	"github.com/PuerkitoBio/goquery"
@@ -21,6 +23,7 @@ type Analyzer struct {
 	extractionTimeout time.Duration
 	cfg               config.Tier2Config
 	log               logger.Logger
+	llmClient         llm.Client
 }
 
 // New constructs an Analyzer using the provided Tier2Config.
@@ -30,7 +33,21 @@ func New(cfg config.Tier2Config, log logger.Logger) *Analyzer {
 	if timeout <= 0 {
 		timeout = defaultExtractionTimeout
 	}
-	return &Analyzer{extractionTimeout: timeout, cfg: cfg, log: log}
+	a := &Analyzer{extractionTimeout: timeout, cfg: cfg, log: log}
+	if cfg.LLM.Enabled {
+		apiKey := cfg.LLM.APIKey
+		if apiKey == "" {
+			apiKey = os.Getenv("ANTHROPIC_API_KEY")
+		}
+		if apiKey != "" {
+			maxTokens := cfg.LLM.MaxTokens
+			if maxTokens <= 0 {
+				maxTokens = 512
+			}
+			a.llmClient = llm.NewAnthropicClient(apiKey, cfg.LLM.Model, maxTokens)
+		}
+	}
+	return a
 }
 
 // Analyze runs all five Tier 2 stages and returns a single AnalysisResult.
@@ -73,9 +90,41 @@ func (a *Analyzer) Analyze(ctx context.Context, resp *pipeline.Response) *pipeli
 		req = &pipeline.Request{}
 	}
 	result := merge(results, hints, hollow, classification, req, a.cfg.Merge)
+
+	// Phase C: LLM semantic fallback — fires only when structured extraction
+	// yielded zero fields and the decision is Escalate.
+	if a.llmClient != nil && len(result.Fields) == 0 && result.Decision == pipeline.DecisionEscalate {
+		llmTimeout := time.Duration(a.cfg.LLM.TimeoutMs) * time.Millisecond
+		if llmTimeout <= 0 {
+			llmTimeout = 15 * time.Second
+		}
+		llmCtx, cancel := context.WithTimeout(ctx, llmTimeout)
+		defer cancel()
+		r, cleanText := runLLMPhaseC(llmCtx, a.llmClient, doc, resp, a.cfg.LLM.Confidence, a.cfg.LLM.MaxTextBytes)
+		result.CleanText = cleanText
+		if len(r.Fields) > 0 {
+			result = mergeLLMResult(result, r)
+		}
+	}
+
 	result.OriginalResponse = resp
 	result.Elapsed = time.Since(start)
 
+	return result
+}
+
+// mergeLLMResult copies LLM-extracted fields into the result and flips the decision to Done.
+func mergeLLMResult(result *pipeline.AnalysisResult, r pipeline.ExtractorResult) *pipeline.AnalysisResult {
+	result.Fields = make(map[string]pipeline.ExtractedField, len(r.Fields))
+	for k, v := range r.Fields {
+		result.Fields[k] = pipeline.ExtractedField{
+			Value:      v,
+			Source:     r.Source,
+			Confidence: r.Confidence,
+			Priority:   r.Priority,
+		}
+	}
+	result.Decision = pipeline.DecisionDone
 	return result
 }
 

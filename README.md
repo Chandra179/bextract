@@ -15,14 +15,14 @@ This pipeline extracts structured data from web pages at 10–30 requests per se
 
 ## Tier Documents
 
-| File | Tier | Summary |
-|---|---|---|
-| [tier1-static-scraper.md](./tier1-static-scraper.md) | Tier 1 | Raw HTTP fetch, hidden API detection |
-| [tier2-content-extraction.md](./tier2-content-extraction.md) | Tier 2 | Intelligence layer — all extractors, merge logic, hollow detection |
-| [tier3-browser-render.md](./tier3-browser-render.md) | Tier 3 | Lightweight headless Chrome via Go-Rod |
-| [tier4-managed-browser.md](./tier4-managed-browser.md) | Tier 4 | Dockerized Browserless for complex session flows |
-| [tier5-stealth-protocol.md](./tier5-stealth-protocol.md) | Tier 5 | Residential proxies + stealth Chromium for bot-protected sites |
-| [cross-cutting.md](./cross-cutting.md) | All tiers | Rate limiting, caching, observability, error taxonomy |
+| File | Tier | Status | Summary |
+|---|---|---|---|
+| [tier1.md](./tier1.md) | Tier 1 | Implemented | Raw HTTP fetch, hidden API detection |
+| [tier2.md](./tier2.md) | Tier 2 | Implemented | Intelligence layer — all extractors, merge logic, hollow detection, LLM fallback |
+| [tier3.md](./tier3.md) | Tier 3 | Implemented | Lightweight headless Chrome via Go-Rod |
+| [tier4.md](./tier4.md) | Tier 4 | Documented | Dockerized Browserless for complex session flows |
+| [tier5.md](./tier5.md) | Tier 5 | Documented | Residential proxies + stealth Chromium for bot-protected sites |
+| [adr.md](./adr.md) | All tiers | — | Architecture decision records and trade-off analysis |
 
 ---
 
@@ -45,10 +45,11 @@ A tier advances a request only when it has confirmed evidence that the current t
 
 ```
 Tier 1   ~1 MB RAM    <100ms    $0.00
-Tier 2   ~1 MB RAM    <150ms    $0.00   (runs within Tier 1 response)
-Tier 3   ~200 MB RAM  1–3s      $0.00   (Go-Rod, local)
-Tier 4   ~512 MB RAM  2–5s      $0.01   (Dockerized Browserless)
-Tier 5   ~512 MB RAM  3–8s      $0.05+  (Residential proxies)
+Tier 2   ~1 MB RAM    <150ms    $0.00        (runs within Tier 1 response)
+Tier 2C  ~1 MB RAM    <15s      ~$0.0001+    (optional LLM fallback, disabled by default)
+Tier 3   ~200 MB RAM  1–3s      $0.00        (Go-Rod, local)
+Tier 4   ~512 MB RAM  2–5s      $0.01        (Dockerized Browserless)
+Tier 5   ~512 MB RAM  3–8s      $0.05+       (Residential proxies)
 ```
 
 ---
@@ -70,6 +71,11 @@ Tier 5   ~512 MB RAM  3–8s      $0.05+  (Residential proxies)
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 2 — Content Detection & Multi-Extractor Pipeline          │
+│                                                                 │
+│  Phase A: Script-tag extractors (concurrent)                    │
+│  Phase B: DOM extractors (concurrent, skipped on hollow+hit)    │
+│  Phase C: LLM semantic fallback (optional, fires on 0-field     │
+│           Escalate only)                                        │
 │                                                                 │
 │  Done ──────────────────────────────────────────► Return Data   │
 │  Abort ─────────────────────────────────────────► Stop          │

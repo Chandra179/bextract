@@ -33,15 +33,11 @@ type Renderer struct {
 	log           logger.Logger
 }
 
-// New launches a headless Chrome instance and returns a ready Renderer.
-// Pass zero-value configs to use all defaults.
-// Returns an error if Chrome cannot be found or the browser fails to connect.
+// New returns a ready Renderer. If t3cfg.BrowserlessURL is set it connects to
+// that CDP endpoint (same approach as Tier 4); otherwise it launches a local
+// headless Chrome via go-rod's launcher.
+// Returns an error if neither option succeeds.
 func New(t3cfg config.Tier3Config, t2cfg config.Tier2Config, log logger.Logger) (*Renderer, error) {
-	binPath, ok := launcher.LookPath()
-	if !ok {
-		return nil, errNoBrowser
-	}
-
 	poolSize := t3cfg.PoolSize
 	if poolSize <= 0 {
 		poolSize = defaultPoolSize
@@ -51,19 +47,26 @@ func New(t3cfg config.Tier3Config, t2cfg config.Tier2Config, log logger.Logger) 
 		renderTimeout = defaultRenderTimeout
 	}
 
-	u, err := launcher.New().
-		Bin(binPath).
-		Headless(true).
-		NoSandbox(true).
-		Set("disable-gpu").
-		Set("disable-dev-shm-usage").
-		Set("disable-images").
-		Launch()
-	if err != nil {
-		return nil, err
+	var browser *rod.Browser
+	if t3cfg.BrowserlessURL != "" {
+		browser = rod.New().ControlURL(t3cfg.BrowserlessURL)
+	} else {
+		binPath, ok := launcher.LookPath()
+		if !ok {
+			return nil, errNoBrowser
+		}
+		u, err := launcher.New().
+			Bin(binPath).
+			Headless(true).
+			NoSandbox(true).
+			Set("disable-gpu").
+			Set("disable-dev-shm-usage").
+			Launch()
+		if err != nil {
+			return nil, err
+		}
+		browser = rod.New().ControlURL(u)
 	}
-
-	browser := rod.New().ControlURL(u)
 	if err := browser.Connect(); err != nil {
 		return nil, err
 	}
@@ -259,3 +262,4 @@ func escalateResult(req *pipeline.Request, reason string, elapsed time.Duration)
 		Elapsed:          elapsed,
 	}
 }
+
