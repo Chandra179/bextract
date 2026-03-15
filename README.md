@@ -13,6 +13,12 @@ This pipeline extracts structured data from web pages at 10–30 requests per se
 
 ---
 
+## Architecture
+ 
+![System Architecture](./architecture.jpg)
+
+---
+
 ## Tier Documents
 
 | File | Tier | Status | Summary |
@@ -85,19 +91,19 @@ Tier 5   ~512 MB RAM  3–8s      $0.05+       (Residential proxies)
                                │ Escalate
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 3 — Lightweight Browser Render            [Implemented]    │
+│  TIER 3 — Lightweight Browser Render            [Implemented]   │
 │  Go-Rod (native Go, no Node.js)                                 │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ Escalate (session complexity)
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 4 — Managed Browser Container             [Implemented]    │
-│  Browserless (Docker) via go-rod CDP                             │
+│  TIER 4 — Managed Browser Container             [Implemented]   │
+│  Browserless (Docker) via go-rod CDP                            │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ Escalate (CAPTCHA / login wall)
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 5 — Stealth Protocol                      [Not Yet]        │
+│  TIER 5 — Stealth Protocol                      [Not Yet]       │
 │  Residential Proxies + Patched Chromium                         │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
