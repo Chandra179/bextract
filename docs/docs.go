@@ -99,10 +99,6 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 10000
                 },
-                "job_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
                 "url": {
                     "type": "string",
                     "example": "https://example.com/product/123"

@@ -73,26 +73,39 @@ The raw response body is parsed into a single `goquery.Document` **exactly once*
 
 ---
 
-## Stage 3 — Hollow Page Detection
+## Stage 3 — Hollow Page Detection & Classification
 
-Before running extractors, the pipeline determines whether the page is a **JavaScript shell** — a page that renders its content client-side and has no useful data in the static HTML.
+Before running extractors, the pipeline determines whether the page is a **JavaScript shell** — a page that renders its content client-side and has no useful data in the static HTML — and classifies the page type.
 
 This does **not** immediately trigger escalation. Even hollow pages can contain data in `<script>` tags (JSON-LD, `__NEXT_DATA__`). The hollow signal is recorded and factored into the Stage 5 decision.
 
 ### Hollow Signals and Penalty Weights
 
-Each signal has a penalty weight. Penalties accumulate. A page is classified as hollow when the **total penalty ≥ 0.70**.
+Each signal has a penalty weight. Penalties accumulate. A page is classified as hollow when the **total penalty ≥ 0.70** (configurable via `hollow.threshold`).
 
-| Signal | Detection Condition | Penalty |
+| Signal | Detection Condition | Default Penalty |
 |---|---|---|
-| Empty app shell | `<div id="app"></div>` with no children | 0.85 |
-| No-script message | Text "enable JavaScript" or "JavaScript required" in body | 0.90 |
-| Tiny body | Raw body size < 5 KB | 0.50 |
-| Low text density | Visible text < 5% of total HTML byte size | 0.70 |
 | CAPTCHA present | reCAPTCHA / hCaptcha / Turnstile widget detected in DOM | 0.95 |
-| Cloudflare challenge | `cf-mitigated: challenge` header (already handled in Stage 1) | 1.00 |
+| No-script message | Text "enable JavaScript" or "JavaScript required" in `<noscript>` | 0.90 |
+| Empty app shell | `<div id="app">`, `<div id="root">`, or `<div id="__next">` with no children | 0.85 |
+| Low text density | Visible text < 5% of total HTML byte size | 0.70 |
+| Tiny body | Raw body size < 5 KB | 0.50 |
+| Cloudflare challenge | `cf-mitigated: challenge` header (injected from Stage 1 TechHints) | 1.00 |
 
-> **Note:** Body size alone is not a reliable hollow signal. A 3 KB page can be a valid small article; a 200 KB page can be a React shell with all content deferred. The **text-density ratio** is the more reliable metric.
+All penalty values are configurable via `hollow.penalties` in the config.
+
+> **Note:** The low-text-density and tiny-body signals are **suppressed on link-rich pages** (pages with ≥ 10 text-bearing `<a>` tags). Link-heavy pages like news aggregators have low text/HTML ratios by design, not because JS is required.
+
+### Page Type Classification
+
+Stage 3 also classifies the page into one of four types. This is stored in the result for observability but does **not** directly influence the escalation decision in the current implementation.
+
+| Page Type | Condition |
+|---|---|
+| `app-shell` | Hollow score ≥ threshold (0.70), or Cloudflare challenge detected |
+| `link-rich` | ≥ 10 text-bearing links and hollow score below threshold |
+| `content-rich` | Not link-rich and hollow score is 0 |
+| `mixed` | Partial hollow signals but below threshold |
 
 ## Stage 4 — Concurrent Extraction
 
@@ -399,116 +412,44 @@ LLM extraction is always the last resort. It cannot distinguish between semantic
 
 ---
 
-### List Page Extraction
-
-When `PageMode = "list"` (triggered by `IsLinkRich = true` from Stage 3), the standard single-entity extractors are replaced by a **ListExtractor** that returns an array of items instead of a single field map.
-
-#### How the ListExtractor works
-
-**Step 1 — Find the repeating container**
-
-The extractor scans candidate elements for structural repetition:
-
-```
-Candidates: li, article, tr, div[class]
-
-For each candidate selector:
-  Count how many elements match
-  If count ≥ 5: score this selector as a candidate
-
-Score each candidate by:
-  - Repetition count (higher = better signal)
-  - Text density per item (items with only <a> tags score lower)
-  - Presence of href in each item
-  - Item text length > 20 chars (filters nav links and footer items)
-```
-
-The highest-scoring selector becomes the `item_container`.
-
-**Step 2 — Extract fields per item**
-
-Each matched container element is treated as a mini-document. The same extractors (data attributes, meta, DOM text) run scoped to that element's subtree.
-
-**Step 3 — Output shape**
-
-```json
-{
-  "fields": {
-    "title": { "value": "Hacker News", "source": "meta-tags" }
-  },
-  "items": [
-    {
-      "title": { "value": "Ask HN: ...", "source": "dom-text" },
-      "url":   { "value": "https://...", "source": "dom-attr" },
-      "score": { "value": "312",         "source": "dom-text" }
-    }
-  ],
-  "item_count": 30,
-  "item_container": "tr.athing"
-}
-```
-
-`fields` contains page-level data (canonical URL, page title). `items` is the array of extracted records. `item_container` is the resolved CSS selector — useful for debugging and for pinning a per-domain config.
-
-**False positive prevention:**
-
-Nav menus and footers are also structurally repetitive. The extractor filters them out by requiring that each candidate item contain at least one non-navigational text node (text length > 20 chars) or have `data-*` attributes. A container of bare `<a>` tags with short text is treated as navigation, not content.
-
----
-
 ## Stage 5 — Merge & Decide
 
 After all extractors complete, results are merged into a single output.
 
 ### Merge Rules
 
-1. Results with confidence below the minimum threshold (default: **0.50**) are discarded
-2. Remaining results are sorted: **source priority first, confidence second**
-3. Fields are merged by priority: when two extractors return the same field, the higher-priority source wins
-4. If `RequiredFields` is configured, the merged output is checked for completeness
+1. Results with errors, zero fields, or confidence below the minimum threshold (default: **0.50**) are discarded
+2. Remaining results are sorted by **source priority ascending** (lower number = higher precedence)
+3. Fields are merged first-write-wins: when two extractors return the same field, the higher-priority source claims it
 
-### Sort Order Detail
+### Sort and Merge Order
 
 ```
-Primary key:   source priority (lower number = wins)
-               JSON-LD (1) always beats DOM-text (10)
+Sort key:   source priority ascending (lower number = wins)
+            JSON-LD (1) always beats DOM-text (10)
 
-Secondary key: confidence score (higher = wins, tiebreaker within same source)
-               used when the same source appears twice for the same field
-
-Tertiary key:  first-seen (deterministic last resort)
+Merge:      first-write-wins — results are iterated in priority order,
+            and the first extractor to provide a field name claims it
 ```
 
-Confidence is never the primary sort key. A DOM-text extractor with 0.95 confidence still loses to JSON-LD with 0.60 confidence — the source hierarchy exists because DOM-text is structurally fragile regardless of how certain the extractor is.
+Results below the minimum confidence threshold (default 0.50) are filtered out before sorting. Confidence is never the primary sort key. A DOM-text extractor with 0.95 confidence still loses to JSON-LD with 0.60 confidence — the source hierarchy exists because DOM-text is structurally fragile regardless of how certain the extractor is.
 
-### Conflict Preservation
+### First-Write-Wins
 
-When two **different high-priority sources** disagree on a field value, the runner-up is preserved in the output rather than silently discarded:
-
-```json
-"price": {
-  "value": "$29.99",
-  "source": "json-ld",
-  "confidence": 0.95,
-  "conflict": {
-    "value": "29.99",
-    "source": "next-data",
-    "confidence": 0.90
-  }
-}
-```
-
-Useful during development for tuning per-domain source trust. Can be suppressed in production via config.
+The merge uses a first-write-wins strategy: fields are iterated in priority order and the first extractor to provide a value for a given field name wins. Lower-priority extractors that return the same field are silently discarded. There is no conflict tracking in the current implementation.
 
 ### Decision Logic
 
 | Condition | Decision |
 |---|---|
-| Header hard signal (403, 404, 429) | `Abort` or `Backoff` — bypasses extractors entirely |
+| Header hard signal (404, 401, 403) | `Abort` — bypasses extractors entirely |
+| Header hard signal (429, 503 + Retry-After) | `Backoff` — bypasses extractors entirely |
+| Cloudflare challenge (`cf-mitigated: challenge`) | `Escalate` — bypasses extractors, skip to higher tier |
 | Page is hollow AND no valid extractions | `Escalate` to Tier 3 |
-| Page is not hollow AND required fields missing | `Escalate` to Tier 3 |
-| Page is hollow BUT data found in script tags | `Done` — hollow detection does not block extraction |
-| All required fields present | `Done` |
+| Page is hollow BUT data found in script tags (Phase A) | `Done` — hollow detection does not block extraction |
+| Any fields extracted (non-hollow page) | `Done` |
+
+> **Known limitation:** The current `decideOutcome` implementation returns `Done` for non-hollow pages even when zero fields are extracted. This means the LLM Phase C fallback only fires for hollow pages that produced no script-tag data. A non-hollow page with no extractable structured data will return `Done` with an empty field map rather than escalating.
 
 ---
 
@@ -520,9 +461,10 @@ HTTP Response (from Tier 1)
          ▼
 ┌─────────────────────┐
 │  Stage 1            │  404       → Abort
-│  Header Analysis    │  403       → Abort
+│  Header Analysis    │  401/403   → Abort
 │                     │  429       → Backoff
-│                     │  cf-mitigated: challenge → Escalate Tier 5
+│                     │  503+Retry → Backoff
+│                     │  cf-mitigated: challenge → Escalate
 │                     │  x-powered-by: Next.js   → hint for Stage 4
 └────────┬────────────┘
          │ Continue
@@ -536,33 +478,26 @@ HTTP Response (from Tier 1)
          ▼
 ┌─────────────────────┐
 │  Stage 3            │  Accumulate hollow penalty signals
-│  Hollow Detection   │  Check IsLinkRich → set PageMode
+│  Hollow Detection   │  Classify page type (app-shell, content-rich,
+│  + Classification   │  link-rich, mixed)
 │                     │  Hollow if total penalty ≥ 0.70
 └────────┬────────────┘
          │
-         ├── PageMode = list ──────────────────┐
-         │                                     ▼
-         │                          ┌─────────────────────┐
-         │                          │  ListExtractor       │
-         │                          │  Find repeating      │
-         │                          │  container, extract  │
-         │                          │  items[]             │
-         │                          └─────────┬───────────┘
-         │                                    │
-         ▼                                    │
+         ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Stage 4 — Concurrent Extraction                        │
 │                                                         │
-│  Phase A (high-signal, run first):                      │
+│  Phase A (script-tag sources, priorities 1–4):          │
 │    goroutine: JSON-LD Extractor        → result         │
 │    goroutine: Next.js __NEXT_DATA__    → result         │
-│    goroutine: Meta Tag Extractor       → result         │
-│                                                         │
-│    ── if required fields satisfied: skip Phase B ──     │
-│                                                         │
-│  Phase B (if Phase A insufficient):                     │
 │    goroutine: State Global Extractor   → result         │
 │    goroutine: Inline Var Extractor     → result         │
+│                                                         │
+│    ── if hollow AND Phase A yielded fields: skip B ──   │
+│                                                         │
+│  Phase B (DOM sources, priorities 5–10):                │
+│    goroutine: Meta Tag Extractor       → result         │
+│    goroutine: Microdata Extractor      → result         │
 │    goroutine: Data Attr Extractor      → result         │
 │    goroutine: Hidden Input Extractor   → result         │
 │    goroutine: CSS Hidden Extractor     → result         │
@@ -574,14 +509,27 @@ HTTP Response (from Tier 1)
          ▼
 ┌─────────────────────┐
 │  Stage 5            │  Sort by priority, then confidence
-│  Merge & Decide     │  Check required fields
-│                     │  Preserve conflicts
+│  Merge & Decide     │  First-write-wins field merge
 └────────┬────────────┘
          │
     ┌────┴──────────────────────┐
     │                           │
- ActionDone               ActionEscalate
- Return merged data       → Tier 3
+  Done                     Escalate ──┐
+  Return merged data                  │
+                                      ▼
+                           ┌────────────────────┐
+                           │  Phase C (optional) │
+                           │  LLM Fallback       │
+                           │  Fires only if:     │
+                           │  - 0 fields found   │
+                           │  - llm.enabled=true │
+                           └────────┬────────────┘
+                                    │
+                              ┌─────┴─────┐
+                              │           │
+                            Done      Escalate
+                            (LLM      → Tier 3
+                            fields)
 ```
 
 ---

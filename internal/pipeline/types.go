@@ -85,17 +85,16 @@ type AnalysisResult struct {
 	HollowScore float64
 	TechHints   TechHints
 	Fields      map[string]ExtractedField
-	CleanText   string        // readable article text produced by go-readability during Phase C
+	CleanText   string // readable article text produced by go-readability during Phase C
 	Elapsed     time.Duration
 }
 
 // RunRequest is the input to the cascade runner.
 type RunRequest struct {
-	URL                 string
-	APIEndpoint         string
-	JobID               string
-	FetchTimeout        time.Duration // 0 = tier default
-	ExtractionTimeout   time.Duration // 0 = tier default
+	URL               string
+	APIEndpoint       string
+	FetchTimeout      time.Duration // 0 = tier default
+	ExtractionTimeout time.Duration // 0 = tier default
 }
 
 // RunResult is the normalised output of whichever tier completed the cascade.

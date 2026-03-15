@@ -61,11 +61,9 @@ func (r *Runner) Run(ctx context.Context, req *pipeline.RunRequest) (*pipeline.R
 		analyzer = tier2.New(overrideCfg, r.log)
 	}
 
-	jobID := req.JobID
-	if jobID == "" {
-		if id, err := r.store.CreateJob(ctx, req.URL); err == nil {
-			jobID = id
-		}
+	var jobID string
+	if id, err := r.store.CreateJob(ctx, req.URL); err == nil {
+		jobID = id
 	}
 
 	// --- Tier 1 ---

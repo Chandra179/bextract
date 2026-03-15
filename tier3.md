@@ -20,13 +20,16 @@ Execute JavaScript and return a fully rendered DOM when static extraction (Tier 
 
 ## Process
 
-1. Fetch raw HTML via `internal/tier1/scraper.go`
-2. Run Tier 2 analysis — if decision is `Done`/`Abort`/`Backoff`, return early (no browser needed)
-3. If `Escalate`: acquire a warm Chrome page from the pool
-4. Navigate with resource interception active (block CSS, images, fonts, analytics)
-5. Wait for target selector → network idle (500ms) → hard 8s cap
-6. Re-run Tier 2 extraction on the rendered HTML
-7. Detect escalation signals (cookie wall, login redirect, headless fingerprint detection)
+The renderer is invoked by the cascade runner only after Tier 2 returns `Escalate`. Tier 1 fetch and Tier 2 pre-analysis are handled by the runner before calling `Render()`.
+
+1. Acquire a warm Chrome page from the pool
+2. Set up request interception to block heavyweight resources (CSS, images, media, fonts) and configured analytics/tracking domains
+3. Navigate to the target URL with a render timeout context (default 8s hard cap)
+4. Wait for network idle (no pending requests for 500ms), bounded by the render timeout
+5. Detect escalation signals (cookie consent walls, login redirects, Cloudflare challenges)
+6. Extract the fully rendered HTML from the page
+7. Build a synthetic Tier 1 response and re-run Tier 2 extraction on the rendered HTML
+8. Return the page to the pool (navigated to `about:blank` for cleanup)
 
 ---
 
@@ -35,15 +38,14 @@ Execute JavaScript and return a fully rendered DOM when static extraction (Tier 
 | Dependency | Role |
 |---|---|
 | `go-rod` | Chrome DevTools Protocol client (Go-native, no Node.js) |
-| `internal/tier1/scraper.go` | Initial HTML fetch |
-| `internal/tier2/analyzer.go` | Pre-render gate + post-render extraction |
-| `ROD_BROWSER_BIN` env var | Path to Chromium binary for go-rod's launcher |
+| `internal/tier2/analyzer.go` | Post-render extraction (re-runs full Tier 2 pipeline on rendered HTML) |
+| `ROD_BROWSER_BIN` env var | Path to Chromium binary for go-rod's launcher (not needed when `browserless_url` is configured) |
 
 ---
 
 ## Responsibility
 
-Execute JavaScript and return the fully rendered DOM. Used **only** when Tier 2 has confirmed that content cannot be obtained statically.
+Execute JavaScript and return the fully rendered DOM. Used **only** when the cascade runner determines that Tier 2 returned `Escalate`, confirming content cannot be obtained statically.
 
 ---
 
@@ -82,10 +84,10 @@ All requests are intercepted at the network layer before they leave the browser.
 
 ## Wait Policy
 
-Do not wait for the full page `load` event. Use the following strategies in order of preference:
+Do not wait for the full page `load` event. The implementation uses:
 
-1. **Wait for target element** — wait for the specific CSS selector that contains the required data to appear in the DOM
-2. **Wait for network idle** — no pending requests for 500ms, with a hard **8-second cap**
+1. **Wait for network idle** — no pending requests for 500ms window, bounded by the render timeout (default **8-second** hard cap)
+2. **Timeout is not fatal** — if the render timeout fires before network idle, extraction proceeds with whatever has loaded
 3. **Never use `time.Sleep`** — unconditional sleeps are fragile and waste time on fast pages
 
 ---
@@ -103,15 +105,17 @@ The pool size should be tuned to the concurrency limit set in the cross-cutting 
 
 ---
 
-## Escalation Criteria to Tier 4
+## Escalation Signals
 
-Tier 3 escalates when it encounters session complexity that Go-Rod cannot handle cleanly:
+The renderer checks for escalation signals after the page loads, before extracting HTML. If any signal is detected, the result is `Escalate` with the reason string — the cascade runner then falls through to Tier 4 if available.
 
-| Scenario | Indicator |
+| Signal | Detection Method |
 |---|---|
-| Cookie consent wall | Overlay present; DOM interaction blocked before content loads |
-| Multi-step authentication | Redirect to `/login` or auth form detected in rendered DOM |
-| Canvas / WebGL fingerprinting | Request blocked despite `--disable-gpu` flag |
-| Headless detection | Site detects Go-Rod's Chrome via `navigator.webdriver` or similar |
+| Cookie consent wall | Presence of known overlay selectors: `#onetrust-banner-sdk`, `.fc-dialog-container`, `#CybotCookiebotDialog`, `.cmp-popup` |
+| Login wall (URL) | Final URL contains `/login`, `/signin`, or `/sign-in` |
+| Login wall (form) | `input[type="password"]` present in rendered DOM |
+| Cloudflare challenge | `#cf-challenge-running` or `.cf-error-type-1010` present in rendered DOM |
+
+If Tier 2 re-analysis on the rendered HTML also returns `Escalate` (e.g. the rendered page is still hollow with no extractable fields), that decision propagates to the runner as well.
 
 ---

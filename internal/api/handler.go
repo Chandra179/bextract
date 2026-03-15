@@ -31,7 +31,6 @@ type ExtractRequest struct {
 	APIEndpoint         string `json:"api_endpoint,omitempty"                          example:"https://api.example.com/product/123"`
 	FetchTimeoutMS      int    `json:"fetch_timeout_ms,omitempty"                      example:"10000"`
 	ExtractionTimeoutMS int    `json:"extraction_timeout_ms,omitempty"                 example:"5000"`
-	JobID               string `json:"job_id,omitempty"                                example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
 // FieldResponse is a single resolved field in the extract response.
@@ -84,7 +83,6 @@ func (h *Handler) Extract(c *gin.Context) {
 	runReq := &pipeline.RunRequest{
 		URL:         req.URL,
 		APIEndpoint: req.APIEndpoint,
-		JobID:       req.JobID,
 	}
 	if req.FetchTimeoutMS > 0 {
 		runReq.FetchTimeout = time.Duration(req.FetchTimeoutMS) * time.Millisecond

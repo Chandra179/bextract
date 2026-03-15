@@ -20,7 +20,7 @@ This pipeline extracts structured data from web pages at 10–30 requests per se
 | [tier1.md](./tier1.md) | Tier 1 | Implemented | Raw HTTP fetch, hidden API detection |
 | [tier2.md](./tier2.md) | Tier 2 | Implemented | Intelligence layer — all extractors, merge logic, hollow detection, LLM fallback |
 | [tier3.md](./tier3.md) | Tier 3 | Implemented | Lightweight headless Chrome via Go-Rod |
-| [tier4.md](./tier4.md) | Tier 4 | Documented | Dockerized Browserless for complex session flows |
+| [tier4.md](./tier4.md) | Tier 4 | Implemented | Dockerized Browserless for complex session flows |
 | [tier5.md](./tier5.md) | Tier 5 | Documented | Residential proxies + stealth Chromium for bot-protected sites |
 | [adr.md](./adr.md) | All tiers | — | Architecture decision records and trade-off analysis |
 
@@ -85,19 +85,19 @@ Tier 5   ~512 MB RAM  3–8s      $0.05+       (Residential proxies)
                                │ Escalate
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 3 — Lightweight Browser Render                            │
+│  TIER 3 — Lightweight Browser Render            [Implemented]    │
 │  Go-Rod (native Go, no Node.js)                                 │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ Escalate (session complexity)
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 4 — Managed Browser Container                             │
-│  Browserless (Docker)                                           │
+│  TIER 4 — Managed Browser Container             [Implemented]    │
+│  Browserless (Docker) via go-rod CDP                             │
 └──────────────────────────────┬──────────────────────────────────┘
-                               │ Escalate (403 / CAPTCHA)
+                               │ Escalate (CAPTCHA / login wall)
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 5 — Stealth Protocol                                      │
+│  TIER 5 — Stealth Protocol                      [Not Yet]        │
 │  Residential Proxies + Patched Chromium                         │
 └──────────────────────────────┬──────────────────────────────────┘
                                │

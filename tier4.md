@@ -1,7 +1,8 @@
 # Tier 4 — Managed Browser Container
 
 **Cost:** ~512 MB RAM · 2–5s · $0.01/request
-**Technology:** Browserless running in Docker
+**Technology:** Browserless running in Docker · go-rod CDP client
+**Status:** Implemented (`internal/tier4/renderer.go`)
 
 ---
 
@@ -13,17 +14,23 @@ Handle session-complex scenarios Go-Rod (Tier 3) cannot manage cleanly, with Chr
 
 ## Input / Output
 
-**Input:** `pipeline.Request` — URL + optional CSS selectors (same shape as Tier 3)
+**Input:** `pipeline.Request` — URL + optional timeout override
 **Output:** `pipeline.RenderResult` — extracted fields + decision (`Done`, `Escalate`, `Abort`, `Backoff`)
 
 ---
 
 ## Process
 
-1. Connect to a Browserless Docker container via WebSocket (CDP)
-2. Execute the same render/extraction flow as Tier 3 — same CDP interface, Chrome is remote
-3. Run Tier 2 extraction on the rendered HTML
-4. Detect post-render 403 or CAPTCHA challenge page → escalate to Tier 5
+The renderer is invoked by the cascade runner only after Tier 3 returns `Escalate`.
+
+1. Create a new page on the remote Browserless Chrome instance via CDP
+2. Set up request interception — block stylesheets, images, media, fonts, and configured analytics/tracking domains
+3. Navigate to the target URL with a render timeout context (default 15s hard cap)
+4. Wait for network idle (no pending requests for 500ms), bounded by the render timeout
+5. Detect escalation signals (CAPTCHA widgets, login walls)
+6. Extract the fully rendered HTML
+7. Build a synthetic Tier 1 response and re-run Tier 2 extraction on the rendered HTML
+8. Close the page (no pooling — each request gets a fresh page)
 
 ---
 
@@ -32,19 +39,21 @@ Handle session-complex scenarios Go-Rod (Tier 3) cannot manage cleanly, with Chr
 | Dependency | Role |
 |---|---|
 | Browserless Docker image | Containerized Chrome with hard memory ceiling and process isolation |
-| CDP / WebSocket | Same protocol as go-rod, just targeting a remote process |
-| `internal/tier2/analyzer.go` | Post-render extraction (identical to Tier 3) |
+| `go-rod` + CDP / WebSocket | Same library as Tier 3, targeting a remote Chrome process |
+| `internal/tier2/analyzer.go` | Post-render extraction (identical pipeline to Tier 3) |
 
 ---
 
-## Comparison with Tier 3
+## Key Differences from Tier 3
 
 | | Tier 3 | Tier 4 |
 |---|---|---|
 | Chrome location | Local, pooled | Remote Docker container |
-| Failure mode handled | Session complexity | Active bot detection |
+| Page lifecycle | Pooled — pages returned to pool after use | Per-request — fresh page created and closed |
+| Default render timeout | 8s | 15s (allows more complex session flows) |
 | Crash isolation | None (kills Go process) | Full (container restarts independently) |
 | Cost | ~$0.00 | ~$0.01/req |
+| Configuration | `tier3.browserless_url` or local Chrome | `tier4.browserless_url` (required) |
 
 ---
 
@@ -67,20 +76,24 @@ The Go application connects to Browserless via WebSocket using the standard Chro
 
 ---
 
-## Escalation Criteria from Tier 3
+## Escalation Signals
 
-| Scenario | Indicator |
+Tier 4 checks for escalation signals after the page loads, before extracting HTML:
+
+| Signal | Detection Method |
 |---|---|
-| Cookie consent wall | Overlay blocks DOM interaction before content is visible |
-| Multi-step login | Redirect to `/login` or presence of auth form |
-| WebGL / Canvas fingerprint block | HTTP 403 returned after page renders |
-| Complex session state | Session cookie required that wasn't established in Tier 3 |
+| CAPTCHA (reCAPTCHA) | `[class*=recaptcha]` present in rendered DOM |
+| CAPTCHA (hCaptcha) | `[class*=hcaptcha]` present in rendered DOM |
+| CAPTCHA (generic) | `[data-sitekey]` attribute present |
+| Login wall (URL) | Final URL contains `/login`, `/signin`, or `/sign-in` |
+
+If an escalation signal is detected, the result is `Escalate` with a reason string. Since Tier 5 is not yet implemented, the cascade runner returns the Tier 4 result as-is.
 
 ---
 
-## Escalation Criteria to Tier 5
+## Escalation to Tier 5
 
-Tier 4 escalates when Browserless returns a **confirmed 403 Forbidden** or a **CAPTCHA challenge page**. These indicate active bot detection that requires a stealth-patched browser and residential IP.
+Tier 4 escalates when it encounters active bot detection that requires a stealth-patched browser and residential IP. These signals indicate the page is intentionally blocking automated access.
 
 A 403 received at Tier 4 is treated differently from a 403 received at Tier 1:
 
@@ -88,5 +101,23 @@ A 403 received at Tier 4 is treated differently from a 403 received at Tier 1:
 |---|---|---|
 | Tier 1 (static HTTP) | Authentication or block on the raw request | Abort — no rendering will fix this |
 | Tier 4 (post-render) | Bot detection triggered after full JS execution | Escalate to Tier 5 |
+
+---
+
+## Configuration
+
+```yaml
+tier4:
+  browserless_url: "ws://localhost:3000"  # required — no fallback to local Chrome
+  render_timeout_ms: 15000                # default 15s
+  block_domains:                          # analytics/tracking domains to block
+    - "*google-analytics.com*"
+    - "*googletagmanager.com*"
+    - "*doubleclick.net*"
+    - "*facebook.com/tr*"
+    - "*hotjar.com*"
+```
+
+If `browserless_url` is not configured, `tier4.New()` returns `errNoBrowserless` and the cascade runner skips Tier 4.
 
 ---

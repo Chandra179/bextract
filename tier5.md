@@ -1,7 +1,8 @@
 # Tier 5 — Stealth Protocol
 
-**Cost:** ~512 MB RAM · 3–8s · $0.05+/request  
+**Cost:** ~512 MB RAM · 3–8s · $0.05+/request
 **Technology:** Residential proxy network + stealth-patched Chromium
+**Status:** Not yet implemented — design specification only
 
 ---
 
@@ -53,4 +54,4 @@ Residential proxy traffic is billed **per megabyte**. Tier 5 must block images, 
 
 At $0.05+ per request, Tier 5 requests should be logged with full detail (URL, proxy cost, bytes transferred) for cost attribution.
 
----/
+---

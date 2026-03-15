@@ -38,17 +38,33 @@ When a hidden API is identified, it should be registered in a per-domain config 
 
 ---
 
+## Implementation Details
+
+| Parameter | Value | Notes |
+|---|---|---|
+| Default timeout | 15s | Configurable per-request via `Request.Timeout` or globally via `tier1.timeout_ms` |
+| Max body size | 10 MB | Body is capped via `io.LimitReader`; larger responses are truncated |
+| Max idle conns per host | 10 | HTTP transport setting for connection reuse |
+| TLS handshake timeout | 5s | |
+| Response header timeout | 10s | |
+| User-Agent | Rotated from pool | Realistic desktop browser strings via `internal/tier1/useragent.go` |
+
+The `Scraper` struct holds a shared `http.Client` and is safe for concurrent use across goroutines.
+
+---
+
 ## Exit Conditions
 
 Tier 1 always exits immediately after receiving the response. It does not retry, it does not parse, and it does not make any escalation decisions. All of that is Tier 2's job.
 
 ```
-Tier 1 output → complete HTTP response object:
-  - Status code
-  - Response headers
-  - Raw body bytes
-  - Final URL (after redirects)
-  - Elapsed time
+Tier 1 output → pipeline.Response:
+  - StatusCode      int
+  - Headers         http.Header
+  - Body            []byte (capped at 10 MB)
+  - FinalURL        string (after following all redirects)
+  - ContentType     string (MIME type only, parameters stripped)
+  - Elapsed         time.Duration
 ```
 
 ---
